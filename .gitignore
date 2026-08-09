@@ -1,0 +1,24 @@
+# Virtual environments
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+# Typing / lint caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.pylint.d/
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/

@@ -1,0 +1,14 @@
+{
+  "editor.formatOnSave": true,
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  "black-formatter.args": [],
+  "black-formatter.cwd": "${workspaceFolder}",
+  "isort.args": ["--settings-path", "${workspaceFolder}/pyproject.toml"],
+  "python.analysis.autoImportCompletions": true
+}
