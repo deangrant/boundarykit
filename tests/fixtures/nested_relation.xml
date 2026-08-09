@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="test">
+  <node id="1" lat="0" lon="0"/>
+  <node id="2" lat="0" lon="1"/>
+  <node id="3" lat="1" lon="1"/>
+  <node id="4" lat="1" lon="0"/>
+  <node id="5" lat="10" lon="10"/>
+  <node id="6" lat="10" lon="11"/>
+  <node id="7" lat="11" lon="11"/>
+  <node id="8" lat="11" lon="10"/>
+  <way id="10">
+    <nd ref="1"/><nd ref="2"/><nd ref="3"/><nd ref="4"/><nd ref="1"/>
+  </way>
+  <way id="20">
+    <nd ref="5"/><nd ref="6"/><nd ref="7"/><nd ref="8"/><nd ref="5"/>
+  </way>
+  <relation id="200">
+    <member type="way" ref="20" role="outer"/>
+    <tag k="name" v="Child"/>
+    <tag k="type" v="multipolygon"/>
+  </relation>
+  <relation id="100">
+    <member type="way" ref="10" role="outer"/>
+    <member type="relation" ref="200" role="subarea"/>
+    <tag k="name" v="Parent"/>
+    <tag k="type" v="boundary"/>
+  </relation>
+</osm>
