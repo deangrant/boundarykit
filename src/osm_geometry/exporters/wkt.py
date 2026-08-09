@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import pathlib
 
-from osm_geometry.models import MultiPolygon
-from osm_geometry.models import Ring
+from osm_geometry import models
 
 
 class WktExporter:
@@ -18,7 +17,7 @@ class WktExporter:
         self._ewkt = ewkt
         self._srid = srid
 
-    def export(self, geometry: MultiPolygon, path: Path) -> None:
+    def export(self, geometry: models.MultiPolygon, path: pathlib.Path) -> None:
         """Writes WKT to path.
 
         Args:
@@ -27,7 +26,7 @@ class WktExporter:
         """
         path.write_text(self.dumps(geometry), encoding="utf-8")
 
-    def dumps(self, geometry: MultiPolygon) -> str:
+    def dumps(self, geometry: models.MultiPolygon) -> str:
         """Returns WKT/EWKT text for geometry."""
         polygons = []
         for polygon in geometry.polygons:
@@ -40,6 +39,6 @@ class WktExporter:
         return body + "\n"
 
 
-def _format_ring(ring: Ring) -> str:
+def _format_ring(ring: models.Ring) -> str:
     coords = ",".join(f"{point.lon} {point.lat}" for point in ring.points)
     return f"({coords})"

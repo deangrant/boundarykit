@@ -5,19 +5,13 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 import logging
 
-from osm_geometry.models import ElementStore
-from osm_geometry.models import LatLon
-from osm_geometry.models import MultiPolygon
-from osm_geometry.models import OsmRelation
-from osm_geometry.models import OsmWay
-from osm_geometry.models import Polygon
-from osm_geometry.models import Ring
+from osm_geometry import models
 
 _LOG = logging.getLogger(__name__)
 
 
 class AssemblyError(Exception):
-    """Raised when relation geometry cannot be assembled."""
+    """Relation geometry could not be assembled from available elements."""
 
 
 class RelationAssembler:
@@ -25,7 +19,7 @@ class RelationAssembler:
 
     def __init__(
         self,
-        fetch_missing: Callable[[int], ElementStore] | None = None,
+        fetch_missing: Callable[[int], models.ElementStore] | None = None,
     ) -> None:
         """Creates an assembler.
 
@@ -37,30 +31,34 @@ class RelationAssembler:
 
     def assemble(
         self,
-        store: ElementStore,
+        store: models.ElementStore,
         relation_id: int,
-        *,
-        _seen: set[int] | None = None,
-    ) -> MultiPolygon:
+    ) -> models.MultiPolygon:
         """Assembles geometry for a relation and nested member relations.
 
         Args:
             store: Available OSM elements.
             relation_id: Root relation id.
-            _seen: Internal recursion guard.
 
         Returns:
             Assembled multipolygon (may be empty for non-area relations that
             only contribute via children).
 
         Raises:
-            AssemblyError: If the relation is missing or yields no geometry
-                when one is required at the root.
+            AssemblyError: If the relation is missing from the store.
         """
-        seen = _seen if _seen is not None else set()
+        return self._assemble_recursive(store, relation_id, seen=set())
+
+    def _assemble_recursive(
+        self,
+        store: models.ElementStore,
+        relation_id: int,
+        *,
+        seen: set[int],
+    ) -> models.MultiPolygon:
         if relation_id in seen:
             _LOG.warning("Skipping cyclic relation reference %s", relation_id)
-            return MultiPolygon(relation_id=relation_id)
+            return models.MultiPolygon(relation_id=relation_id)
         seen.add(relation_id)
 
         relation = store.relations.get(relation_id)
@@ -71,27 +69,29 @@ class RelationAssembler:
             raise AssemblyError(f"Relation {relation_id} not found in store")
 
         own = self._assemble_own_polygons(store, relation)
-        child_geoms: list[MultiPolygon] = []
+        child_geoms: list[models.MultiPolygon] = []
         for member in relation.members:
             if member.member_type != "relation":
                 continue
-            child_store = store
             if member.ref not in store.relations and self._fetch_missing:
                 store.merge(self._fetch_missing(member.ref))
             try:
-                child = self.assemble(child_store, member.ref, _seen=seen)
-            except AssemblyError as error:
+                child = self._assemble_recursive(store, member.ref, seen=seen)
+            except AssemblyError as err:
                 _LOG.warning(
                     "Could not assemble nested relation %s: %s",
                     member.ref,
-                    error,
+                    err,
                 )
                 continue
             if not child.is_empty():
                 child_geoms.append(child)
 
-        polygons = [*own, *[p for g in child_geoms for p in g.polygons]]
-        return MultiPolygon(
+        polygons = list(own)
+        for geom in child_geoms:
+            for polygon in geom.polygons:
+                polygons.append(polygon)
+        return models.MultiPolygon(
             polygons=polygons,
             relation_id=relation_id,
             name=relation.name,
@@ -99,11 +99,11 @@ class RelationAssembler:
 
     def _assemble_own_polygons(
         self,
-        store: ElementStore,
-        relation: OsmRelation,
-    ) -> list[Polygon]:
-        outer_ways: list[list[LatLon]] = []
-        inner_ways: list[list[LatLon]] = []
+        store: models.ElementStore,
+        relation: models.OsmRelation,
+    ) -> list[models.Polygon]:
+        outer_ways: list[list[models.LatLon]] = []
+        inner_ways: list[list[models.LatLon]] = []
         for member in relation.members:
             if member.member_type != "way":
                 continue
@@ -133,10 +133,10 @@ class RelationAssembler:
 
     def _way_coordinates(
         self,
-        store: ElementStore,
-        way: OsmWay,
-    ) -> list[LatLon]:
-        points: list[LatLon] = []
+        store: models.ElementStore,
+        way: models.OsmWay,
+    ) -> list[models.LatLon]:
+        points: list[models.LatLon] = []
         for node_id in way.node_ids:
             node = store.nodes.get(node_id)
             if node is None:
@@ -146,10 +146,12 @@ class RelationAssembler:
         return points
 
 
-def _rings_from_ways(ways: Sequence[list[LatLon]]) -> list[Ring]:
+def _rings_from_ways(
+    ways: Sequence[list[models.LatLon]],
+) -> list[models.Ring]:
     """Chains way polylines into closed rings by matching endpoints."""
     remaining = [list(way) for way in ways if len(way) >= 2]
-    rings: list[Ring] = []
+    rings: list[models.Ring] = []
     while remaining:
         chain = remaining.pop(0)
         progressed = True
@@ -181,17 +183,17 @@ def _rings_from_ways(ways: Sequence[list[LatLon]]) -> list[Ring]:
                     progressed = True
                     break
         if _is_closed_line(chain) and len(chain) >= 4:
-            rings.append(Ring(points=chain))
+            rings.append(models.Ring(points=chain))
         else:
             _LOG.warning("Could not close ring from %s segments", len(chain))
     return rings
 
 
 def _assign_inners(
-    outers: Sequence[Ring],
-    inners: Sequence[Ring],
-) -> list[Polygon]:
-    polygons = [Polygon(outer=outer, inners=[]) for outer in outers]
+    outers: Sequence[models.Ring],
+    inners: Sequence[models.Ring],
+) -> list[models.Polygon]:
+    polygons = [models.Polygon(outer=outer, inners=[]) for outer in outers]
     for inner in inners:
         if not inner.points:
             continue
@@ -209,15 +211,15 @@ def _assign_inners(
     return polygons
 
 
-def _is_closed_line(points: Sequence[LatLon]) -> bool:
+def _is_closed_line(points: Sequence[models.LatLon]) -> bool:
     return len(points) >= 4 and _same_point(points[0], points[-1])
 
 
-def _same_point(left: LatLon, right: LatLon) -> bool:
+def _same_point(left: models.LatLon, right: models.LatLon) -> bool:
     return left.lat == right.lat and left.lon == right.lon
 
 
-def _point_in_ring(point: LatLon, ring: Ring) -> bool:
+def _point_in_ring(point: models.LatLon, ring: models.Ring) -> bool:
     """Ray-casting point-in-polygon test (lon/lat as x/y)."""
     x = point.lon
     y = point.lat

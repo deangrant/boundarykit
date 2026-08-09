@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import pathlib
 import unittest
 
-from osm_geometry.client import parse_osm_xml
+from osm_geometry import client
 
-_FIXTURES = Path(__file__).parent / "fixtures"
+_FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 
 
 class ParseOsmXmlTest(unittest.TestCase):
@@ -15,7 +15,7 @@ class ParseOsmXmlTest(unittest.TestCase):
 
     def test_parses_nodes_ways_relations(self) -> None:
         payload = (_FIXTURES / "simple_relation.xml").read_bytes()
-        store = parse_osm_xml(payload)
+        store = client.parse_osm_xml(payload)
         self.assertIn(1, store.nodes)
         self.assertEqual(store.nodes[1].coordinate.lat, 0.0)
         self.assertIn(10, store.ways)

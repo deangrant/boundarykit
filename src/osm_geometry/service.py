@@ -4,15 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 import logging
-from pathlib import Path
+import pathlib
 import re
 
-from osm_geometry.assembler import AssemblyError
-from osm_geometry.assembler import RelationAssembler
-from osm_geometry.client import OsmApiClientProtocol
-from osm_geometry.exporters.base import GeometryExporter
-from osm_geometry.models import MultiPolygon
-from osm_geometry.simplify import GeometrySimplifier
+from osm_geometry import assembler
+from osm_geometry import client
+from osm_geometry import models
+from osm_geometry import simplify
+from osm_geometry.exporters import base
 
 _LOG = logging.getLogger(__name__)
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
@@ -23,21 +22,29 @@ class RelationGeometryService:
 
     def __init__(
         self,
-        client: OsmApiClientProtocol,
-        assembler: RelationAssembler,
-        simplifier: GeometrySimplifier,
-        exporters: Mapping[str, GeometryExporter],
+        osm_client: client.OsmApiClientProtocol,
+        relation_assembler: assembler.RelationAssembler,
+        geometry_simplifier: simplify.GeometrySimplifier,
+        exporters: Mapping[str, base.GeometryExporter],
     ) -> None:
-        self._client = client
-        self._assembler = assembler
-        self._simplifier = simplifier
+        """Creates a service with injected collaborators.
+
+        Args:
+            osm_client: Fetches OSM relation payloads.
+            relation_assembler: Builds multipolygons from element stores.
+            geometry_simplifier: Optional vertex simplification.
+            exporters: Format id to exporter implementations.
+        """
+        self._client = osm_client
+        self._assembler = relation_assembler
+        self._simplifier = geometry_simplifier
         self._exporters = dict(exporters)
 
     def build_geometry(
         self,
         relation_id: int,
         simplify_tolerance: float | None = None,
-    ) -> MultiPolygon:
+    ) -> models.MultiPolygon:
         """Fetches and assembles geometry for a relation.
 
         Args:
@@ -48,24 +55,25 @@ class RelationGeometryService:
             Assembled (and optionally simplified) multipolygon.
 
         Raises:
-            AssemblyError: When geometry cannot be built.
+            client.OsmClientError: When the API fetch fails.
+            assembler.AssemblyError: When geometry cannot be built.
         """
         store = self._client.fetch_relation_full(relation_id)
         geometry = self._assembler.assemble(store, relation_id)
         if geometry.is_empty():
-            raise AssemblyError(
+            raise assembler.AssemblyError(
                 f"Relation {relation_id} produced no polygon geometry"
             )
         return self._simplifier.simplify(geometry, simplify_tolerance)
 
     def export(
         self,
-        geometry: MultiPolygon,
+        geometry: models.MultiPolygon,
         formats: Sequence[str],
         *,
-        output: Path | None = None,
-        output_dir: Path | None = None,
-    ) -> list[Path]:
+        output: pathlib.Path | None = None,
+        output_dir: pathlib.Path | None = None,
+    ) -> list[pathlib.Path]:
         """Exports geometry to one or more formats.
 
         Args:
@@ -96,7 +104,7 @@ class RelationGeometryService:
             _LOG.info("Wrote %s", path)
             return [path]
 
-        directory = output_dir or Path.cwd()
+        directory = output_dir or pathlib.Path.cwd()
         directory.mkdir(parents=True, exist_ok=True)
         stem = geometry.name or (
             f"relation_{geometry.relation_id}"
@@ -104,7 +112,7 @@ class RelationGeometryService:
             else "geometry"
         )
         safe_stem = _safe_filename(stem)
-        written: list[Path] = []
+        written: list[pathlib.Path] = []
         for fmt in normalized:
             exporter = self._exporters[fmt]
             path = directory / f"{safe_stem}{exporter.file_extension}"
@@ -119,9 +127,9 @@ class RelationGeometryService:
         formats: Iterable[str],
         *,
         simplify_tolerance: float | None = None,
-        output: Path | None = None,
-        output_dir: Path | None = None,
-    ) -> list[Path]:
+        output: pathlib.Path | None = None,
+        output_dir: pathlib.Path | None = None,
+    ) -> list[pathlib.Path]:
         """Builds geometry and exports it.
 
         Args:
@@ -133,6 +141,11 @@ class RelationGeometryService:
 
         Returns:
             Written file paths.
+
+        Raises:
+            client.OsmClientError: When the API fetch fails.
+            assembler.AssemblyError: When geometry cannot be built.
+            ValueError: On unknown format or invalid path combination.
         """
         geometry = self.build_geometry(
             relation_id,

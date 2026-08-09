@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 
-from osm_geometry.cli import main
+from osm_geometry import cli
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(cli.main())

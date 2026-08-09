@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+import pathlib
 from typing import Any
 
-from osm_geometry.models import MultiPolygon
-from osm_geometry.models import Ring
+from osm_geometry import models
 
 
 class GeoJsonExporter:
@@ -19,7 +18,7 @@ class GeoJsonExporter:
     def __init__(self, as_feature: bool = False) -> None:
         self._as_feature = as_feature
 
-    def export(self, geometry: MultiPolygon, path: Path) -> None:
+    def export(self, geometry: models.MultiPolygon, path: pathlib.Path) -> None:
         """Writes GeoJSON to path.
 
         Args:
@@ -28,12 +27,12 @@ class GeoJsonExporter:
         """
         path.write_text(self.dumps(geometry), encoding="utf-8")
 
-    def dumps(self, geometry: MultiPolygon) -> str:
+    def dumps(self, geometry: models.MultiPolygon) -> str:
         """Returns GeoJSON text for geometry."""
         payload = self._build(geometry)
         return json.dumps(payload, indent=2) + "\n"
 
-    def _build(self, geometry: MultiPolygon) -> dict[str, Any]:
+    def _build(self, geometry: models.MultiPolygon) -> dict[str, Any]:
         coordinates = []
         for polygon in geometry.polygons:
             rings = [_ring_coords(polygon.outer)]
@@ -57,5 +56,5 @@ class GeoJsonExporter:
         }
 
 
-def _ring_coords(ring: Ring) -> list[list[float]]:
+def _ring_coords(ring: models.Ring) -> list[list[float]]:
     return [[point.lon, point.lat] for point in ring.points]

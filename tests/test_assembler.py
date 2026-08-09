@@ -2,38 +2,42 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import pathlib
 import unittest
 
-from osm_geometry.assembler import RelationAssembler
-from osm_geometry.client import parse_osm_xml
+from osm_geometry import assembler
+from osm_geometry import client
 
-_FIXTURES = Path(__file__).parent / "fixtures"
+_FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 
 
 class RelationAssemblerTest(unittest.TestCase):
     """Tests RelationAssembler."""
 
     def test_outer_and_inner(self) -> None:
-        store = parse_osm_xml((_FIXTURES / "simple_relation.xml").read_bytes())
-        geom = RelationAssembler().assemble(store, 100)
+        store = client.parse_osm_xml(
+            (_FIXTURES / "simple_relation.xml").read_bytes()
+        )
+        geom = assembler.RelationAssembler().assemble(store, 100)
         self.assertEqual(len(geom.polygons), 1)
         self.assertEqual(len(geom.polygons[0].inners), 1)
         self.assertEqual(geom.name, "Test Area")
         self.assertTrue(geom.polygons[0].outer.is_closed())
 
     def test_chains_open_ways(self) -> None:
-        store = parse_osm_xml(
+        store = client.parse_osm_xml(
             (_FIXTURES / "open_ways_relation.xml").read_bytes()
         )
-        geom = RelationAssembler().assemble(store, 100)
+        geom = assembler.RelationAssembler().assemble(store, 100)
         self.assertEqual(len(geom.polygons), 1)
         self.assertTrue(geom.polygons[0].outer.is_closed())
         self.assertGreaterEqual(len(geom.polygons[0].outer.points), 4)
 
     def test_nested_relation_merge(self) -> None:
-        store = parse_osm_xml((_FIXTURES / "nested_relation.xml").read_bytes())
-        geom = RelationAssembler().assemble(store, 100)
+        store = client.parse_osm_xml(
+            (_FIXTURES / "nested_relation.xml").read_bytes()
+        )
+        geom = assembler.RelationAssembler().assemble(store, 100)
         self.assertEqual(len(geom.polygons), 2)
         self.assertEqual(geom.name, "Parent")
 

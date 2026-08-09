@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from osm_geometry.models import LatLon
-from osm_geometry.models import MultiPolygon
-from osm_geometry.models import Polygon
-from osm_geometry.models import Ring
+from osm_geometry import models
 
 
 class GeometrySimplifier:
@@ -13,9 +10,9 @@ class GeometrySimplifier:
 
     def simplify(
         self,
-        geometry: MultiPolygon,
+        geometry: models.MultiPolygon,
         tolerance: float | None,
-    ) -> MultiPolygon:
+    ) -> models.MultiPolygon:
         """Returns a simplified copy, or the input when tolerance is unused.
 
         Args:
@@ -29,7 +26,7 @@ class GeometrySimplifier:
         if tolerance is None or tolerance <= 0:
             return geometry
         polygons = [
-            Polygon(
+            models.Polygon(
                 outer=self._simplify_ring(polygon.outer, tolerance),
                 inners=[
                     self._simplify_ring(inner, tolerance)
@@ -38,16 +35,18 @@ class GeometrySimplifier:
             )
             for polygon in geometry.polygons
         ]
-        return MultiPolygon(
+        return models.MultiPolygon(
             polygons=polygons,
             relation_id=geometry.relation_id,
             name=geometry.name,
         )
 
-    def _simplify_ring(self, ring: Ring, tolerance: float) -> Ring:
+    def _simplify_ring(
+        self, ring: models.Ring, tolerance: float
+    ) -> models.Ring:
         points = list(ring.points)
         if len(points) < 4:
-            return Ring(points=points)
+            return models.Ring(points=points)
         closed = (
             points[0].lat == points[-1].lat and points[0].lon == points[-1].lon
         )
@@ -57,10 +56,12 @@ class GeometrySimplifier:
             return ring
         if closed:
             simplified = [*simplified, simplified[0]]
-        return Ring(points=simplified)
+        return models.Ring(points=simplified)
 
 
-def _douglas_peucker(points: list[LatLon], tolerance: float) -> list[LatLon]:
+def _douglas_peucker(
+    points: list[models.LatLon], tolerance: float
+) -> list[models.LatLon]:
     if len(points) < 3:
         return list(points)
     start = points[0]
@@ -80,9 +81,9 @@ def _douglas_peucker(points: list[LatLon], tolerance: float) -> list[LatLon]:
 
 
 def _perpendicular_distance(
-    point: LatLon,
-    start: LatLon,
-    end: LatLon,
+    point: models.LatLon,
+    start: models.LatLon,
+    end: models.LatLon,
 ) -> float:
     """Returns perpendicular distance from point to segment in degree space."""
     dx = end.lon - start.lon

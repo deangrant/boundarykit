@@ -2,29 +2,29 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from tempfile import TemporaryDirectory
+import pathlib
+import tempfile
 import unittest
 
-from osm_geometry.assembler import RelationAssembler
-from osm_geometry.client import parse_osm_xml
-from osm_geometry.exporters.geojson import GeoJsonExporter
-from osm_geometry.exporters.wkt import WktExporter
-from osm_geometry.models import ElementStore
-from osm_geometry.service import RelationGeometryService
-from osm_geometry.simplify import GeometrySimplifier
+from osm_geometry import assembler
+from osm_geometry import client
+from osm_geometry import models
+from osm_geometry import service
+from osm_geometry import simplify
+from osm_geometry.exporters import geojson
+from osm_geometry.exporters import wkt
 
-_FIXTURES = Path(__file__).parent / "fixtures"
+_FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 
 
 class _FakeClient:
     """In-memory client returning a fixture store."""
 
-    def __init__(self, store: ElementStore) -> None:
+    def __init__(self, store: models.ElementStore) -> None:
         self._store = store
 
-    def fetch_relation_full(self, relation_id: int) -> ElementStore:
-        del relation_id
+    def fetch_relation_full(self, relation_id: int) -> models.ElementStore:
+        del relation_id  # Unused.
         return self._store
 
 
@@ -32,21 +32,25 @@ class RelationGeometryServiceTest(unittest.TestCase):
     """Tests service build/export."""
 
     def test_run_writes_outputs(self) -> None:
-        store = parse_osm_xml((_FIXTURES / "simple_relation.xml").read_bytes())
-        service = RelationGeometryService(
-            client=_FakeClient(store),
-            assembler=RelationAssembler(),
-            simplifier=GeometrySimplifier(),
+        store = client.parse_osm_xml(
+            (_FIXTURES / "simple_relation.xml").read_bytes()
+        )
+        geojson_exporter = geojson.GeoJsonExporter()
+        wkt_exporter = wkt.WktExporter(ewkt=True)
+        geometry_service = service.RelationGeometryService(
+            osm_client=_FakeClient(store),
+            relation_assembler=assembler.RelationAssembler(),
+            geometry_simplifier=simplify.GeometrySimplifier(),
             exporters={
-                "geojson": GeoJsonExporter(),
-                "wkt": WktExporter(ewkt=True),
+                geojson_exporter.format_id: geojson_exporter,
+                wkt_exporter.format_id: wkt_exporter,
             },
         )
-        with TemporaryDirectory() as tmp:
-            paths = service.run(
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = geometry_service.run(
                 100,
                 ["geojson", "wkt"],
-                output_dir=Path(tmp),
+                output_dir=pathlib.Path(tmp),
             )
             self.assertEqual(len(paths), 2)
             for path in paths:

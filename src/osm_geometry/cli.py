@@ -4,19 +4,18 @@ from __future__ import annotations
 
 import argparse
 import logging
-from pathlib import Path
+import pathlib
 import sys
 
-from osm_geometry.assembler import AssemblyError
-from osm_geometry.assembler import RelationAssembler
-from osm_geometry.client import OsmApiClient
-from osm_geometry.client import OsmClientError
-from osm_geometry.exporters.geojson import GeoJsonExporter
-from osm_geometry.exporters.poly import PolyExporter
-from osm_geometry.exporters.svg import SvgExporter
-from osm_geometry.exporters.wkt import WktExporter
-from osm_geometry.service import RelationGeometryService
-from osm_geometry.simplify import GeometrySimplifier
+from osm_geometry import assembler
+from osm_geometry import client
+from osm_geometry import models
+from osm_geometry import service
+from osm_geometry import simplify
+from osm_geometry.exporters import geojson
+from osm_geometry.exporters import poly
+from osm_geometry.exporters import svg
+from osm_geometry.exporters import wkt
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -43,12 +42,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-o",
         "--output",
-        type=Path,
+        type=pathlib.Path,
         help="Output file when exporting a single format",
     )
     parser.add_argument(
         "--output-dir",
-        type=Path,
+        type=pathlib.Path,
         help="Output directory when exporting one or more formats",
     )
     parser.add_argument(
@@ -87,7 +86,7 @@ def build_service(
     ewkt: bool = False,
     geojson_feature: bool = False,
     base_url: str | None = None,
-) -> RelationGeometryService:
+) -> service.RelationGeometryService:
     """Wires concrete collaborators for the CLI.
 
     Args:
@@ -101,23 +100,26 @@ def build_service(
     client_kwargs = {}
     if base_url:
         client_kwargs["base_url"] = base_url
-    client = OsmApiClient(**client_kwargs)
+    osm_client = client.OsmApiClient(**client_kwargs)
 
-    def fetch_missing(relation_id: int):
-        return client.fetch_relation_full(relation_id)
+    def fetch_missing(relation_id: int) -> models.ElementStore:
+        return osm_client.fetch_relation_full(relation_id)
 
-    assembler = RelationAssembler(fetch_missing=fetch_missing)
-    simplifier = GeometrySimplifier()
-    exporters = {
-        "poly": PolyExporter(),
-        "geojson": GeoJsonExporter(as_feature=geojson_feature),
-        "wkt": WktExporter(ewkt=ewkt),
-        "svg": SvgExporter(),
-    }
-    return RelationGeometryService(
-        client=client,
-        assembler=assembler,
-        simplifier=simplifier,
+    relation_assembler = assembler.RelationAssembler(
+        fetch_missing=fetch_missing
+    )
+    geometry_simplifier = simplify.GeometrySimplifier()
+    exporter_list = [
+        poly.PolyExporter(),
+        geojson.GeoJsonExporter(as_feature=geojson_feature),
+        wkt.WktExporter(ewkt=ewkt),
+        svg.SvgExporter(),
+    ]
+    exporters = {exporter.format_id: exporter for exporter in exporter_list}
+    return service.RelationGeometryService(
+        osm_client=osm_client,
+        relation_assembler=relation_assembler,
+        geometry_simplifier=geometry_simplifier,
         exporters=exporters,
     )
 
@@ -146,21 +148,26 @@ def main(argv: list[str] | None = None) -> int:
     ):
         parser.error("--output requires a single format (or use --output-dir)")
 
-    service = build_service(
+    geometry_service = build_service(
         ewkt=args.ewkt,
         geojson_feature=args.geojson_feature,
         base_url=args.base_url,
     )
     try:
-        paths = service.run(
+        paths = geometry_service.run(
             args.relation_id,
             formats,
             simplify_tolerance=args.simplify,
             output=args.output,
             output_dir=args.output_dir,
         )
-    except (OsmClientError, AssemblyError, ValueError, OSError) as error:
-        logging.error("%s", error)
+    except (
+        client.OsmClientError,
+        assembler.AssemblyError,
+        ValueError,
+        OSError,
+    ) as err:
+        logging.error("%s", err)
         return 1
 
     for path in paths:

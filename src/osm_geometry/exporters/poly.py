@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import pathlib
 
-from osm_geometry.models import MultiPolygon
+from osm_geometry import models
 
 
 class PolyExporter:
@@ -13,7 +13,7 @@ class PolyExporter:
     format_id = "poly"
     file_extension = ".poly"
 
-    def export(self, geometry: MultiPolygon, path: Path) -> None:
+    def export(self, geometry: models.MultiPolygon, path: pathlib.Path) -> None:
         """Writes .poly content to path.
 
         Args:
@@ -22,7 +22,7 @@ class PolyExporter:
         """
         path.write_text(self.dumps(geometry), encoding="utf-8")
 
-    def dumps(self, geometry: MultiPolygon) -> str:
+    def dumps(self, geometry: models.MultiPolygon) -> str:
         """Returns .poly text for geometry."""
         name = geometry.name or (
             f"relation_{geometry.relation_id}"

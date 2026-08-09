@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import pathlib
 from typing import Protocol
 
-from osm_geometry.models import MultiPolygon
+from osm_geometry import models
 
 
 class GeometryExporter(Protocol):
@@ -14,5 +14,5 @@ class GeometryExporter(Protocol):
     format_id: str
     file_extension: str
 
-    def export(self, geometry: MultiPolygon, path: Path) -> None:
+    def export(self, geometry: models.MultiPolygon, path: pathlib.Path) -> None:
         """Writes geometry to path."""

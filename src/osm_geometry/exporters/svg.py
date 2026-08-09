@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from xml.sax.saxutils import escape
+import pathlib
+import xml.sax.saxutils as saxutils
 
-from osm_geometry.models import MultiPolygon
-from osm_geometry.models import Ring
+from osm_geometry import models
 
 
 class SvgExporter:
@@ -25,7 +24,7 @@ class SvgExporter:
         self._height = height
         self._padding = padding
 
-    def export(self, geometry: MultiPolygon, path: Path) -> None:
+    def export(self, geometry: models.MultiPolygon, path: pathlib.Path) -> None:
         """Writes SVG to path.
 
         Args:
@@ -34,7 +33,7 @@ class SvgExporter:
         """
         path.write_text(self.dumps(geometry), encoding="utf-8")
 
-    def dumps(self, geometry: MultiPolygon) -> str:
+    def dumps(self, geometry: models.MultiPolygon) -> str:
         """Returns SVG markup for geometry."""
         bbox = geometry.bbox()
         title = geometry.name or (
@@ -46,7 +45,7 @@ class SvgExporter:
             return (
                 '<svg xmlns="http://www.w3.org/2000/svg" '
                 f'width="{self._width}" height="{self._height}">'
-                f'<text x="10" y="20">{escape(title)} (empty)</text>'
+                f'<text x="10" y="20">{saxutils.escape(title)} (empty)</text>'
                 "</svg>\n"
             )
 
@@ -99,7 +98,7 @@ class SvgExporter:
             '<svg xmlns="http://www.w3.org/2000/svg" '
             f'width="{self._width}" height="{self._height}" '
             f'viewBox="{view_box}">\n'
-            f"  <title>{escape(title)}</title>\n"
+            f"  <title>{saxutils.escape(title)}</title>\n"
             f'  <rect width="100%" height="100%" fill="#f7f7f7"/>\n'
             f"  {body}\n"
             f"</svg>\n"
@@ -107,7 +106,7 @@ class SvgExporter:
 
 
 def _ring_path(
-    ring: Ring,
+    ring: models.Ring,
     min_lon: float,
     max_lat: float,
     lon_span: float,

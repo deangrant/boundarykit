@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from dataclasses import field
+import dataclasses
 
 
-@dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class LatLon:
     """A geographic coordinate (WGS84)."""
 
@@ -14,7 +13,7 @@ class LatLon:
     lon: float
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class OsmNode:
     """An OSM node element."""
 
@@ -22,16 +21,16 @@ class OsmNode:
     coordinate: LatLon
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class OsmWay:
     """An OSM way element."""
 
     osm_id: int
-    node_ids: list[int] = field(default_factory=list)
-    tags: dict[str, str] = field(default_factory=dict)
+    node_ids: list[int] = dataclasses.field(default_factory=list)
+    tags: dict[str, str] = dataclasses.field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class OsmMember:
     """A member reference on an OSM relation."""
 
@@ -40,13 +39,13 @@ class OsmMember:
     role: str
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class OsmRelation:
     """An OSM relation element."""
 
     osm_id: int
-    members: list[OsmMember] = field(default_factory=list)
-    tags: dict[str, str] = field(default_factory=dict)
+    members: list[OsmMember] = dataclasses.field(default_factory=list)
+    tags: dict[str, str] = dataclasses.field(default_factory=dict)
 
     @property
     def name(self) -> str | None:
@@ -54,13 +53,13 @@ class OsmRelation:
         return self.tags.get("name")
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class ElementStore:
     """In-memory collection of OSM elements keyed by id."""
 
-    nodes: dict[int, OsmNode] = field(default_factory=dict)
-    ways: dict[int, OsmWay] = field(default_factory=dict)
-    relations: dict[int, OsmRelation] = field(default_factory=dict)
+    nodes: dict[int, OsmNode] = dataclasses.field(default_factory=dict)
+    ways: dict[int, OsmWay] = dataclasses.field(default_factory=dict)
+    relations: dict[int, OsmRelation] = dataclasses.field(default_factory=dict)
 
     def merge(self, other: ElementStore) -> None:
         """Merges another store into this one."""
@@ -69,7 +68,7 @@ class ElementStore:
         self.relations.update(other.relations)
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class Ring:
     """A closed ring of coordinates (first point equals last)."""
 
@@ -84,19 +83,19 @@ class Ring:
         return first.lat == last.lat and first.lon == last.lon
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class Polygon:
     """A polygon with one outer ring and zero or more inner rings."""
 
     outer: Ring
-    inners: list[Ring] = field(default_factory=list)
+    inners: list[Ring] = dataclasses.field(default_factory=list)
 
 
-@dataclass(slots=True)
+@dataclasses.dataclass(slots=True)
 class MultiPolygon:
     """A collection of polygons representing relation geometry."""
 
-    polygons: list[Polygon] = field(default_factory=list)
+    polygons: list[Polygon] = dataclasses.field(default_factory=list)
     relation_id: int | None = None
     name: str | None = None
 
