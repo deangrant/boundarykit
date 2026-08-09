@@ -31,6 +31,40 @@ class ParseOsmXmlTest(unittest.TestCase):
         self.assertEqual(store.relations[100].name, "Test Area")
         self.assertEqual(len(store.relations[100].members), 2)
 
+    def test_node_missing_lat_raises_osm_client_error(self) -> None:
+        payload = b"""<?xml version="1.0"?>
+        <osm version="0.6">
+          <node id="1" lon="0"/>
+        </osm>
+        """
+        with self.assertRaises(client.OsmClientError) as ctx:
+            client.parse_osm_xml(payload)
+        self.assertIn("missing lat", str(ctx.exception))
+
+    def test_way_nd_missing_ref_raises_osm_client_error(self) -> None:
+        payload = b"""<?xml version="1.0"?>
+        <osm version="0.6">
+          <way id="10"><nd/></way>
+        </osm>
+        """
+        with self.assertRaises(client.OsmClientError) as ctx:
+            client.parse_osm_xml(payload)
+        self.assertIn("missing ref", str(ctx.exception))
+
+    def test_relation_member_missing_type_raises_osm_client_error(
+        self,
+    ) -> None:
+        payload = b"""<?xml version="1.0"?>
+        <osm version="0.6">
+          <relation id="100">
+            <member ref="10" role="outer"/>
+          </relation>
+        </osm>
+        """
+        with self.assertRaises(client.OsmClientError) as ctx:
+            client.parse_osm_xml(payload)
+        self.assertIn("missing type", str(ctx.exception))
+
 
 class _FakeResponse:
     """Minimal urlopen response supporting chunked reads."""

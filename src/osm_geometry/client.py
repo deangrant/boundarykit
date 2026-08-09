@@ -279,17 +279,23 @@ def parse_osm_xml(payload: bytes | str) -> models.ElementStore:
 
 
 def _parse_node(element: ET.Element) -> models.OsmNode:
-    osm_id = int(element.attrib["id"])
-    lat = float(element.attrib["lat"])
-    lon = float(element.attrib["lon"])
+    try:
+        osm_id = int(element.attrib["id"])
+        lat = float(element.attrib["lat"])
+        lon = float(element.attrib["lon"])
+    except (KeyError, TypeError, ValueError) as err:
+        raise _invalid_element_error("node", element, err) from err
     return models.OsmNode(
         osm_id=osm_id, coordinate=models.LatLon(lat=lat, lon=lon)
     )
 
 
 def _parse_way(element: ET.Element) -> models.OsmWay:
-    osm_id = int(element.attrib["id"])
-    node_ids = [int(nd.attrib["ref"]) for nd in element.findall("nd")]
+    try:
+        osm_id = int(element.attrib["id"])
+        node_ids = [int(nd.attrib["ref"]) for nd in element.findall("nd")]
+    except (KeyError, TypeError, ValueError) as err:
+        raise _invalid_element_error("way", element, err) from err
     tags = {
         tag.attrib["k"]: tag.attrib["v"]
         for tag in element.findall("tag")
@@ -299,18 +305,39 @@ def _parse_way(element: ET.Element) -> models.OsmWay:
 
 
 def _parse_relation(element: ET.Element) -> models.OsmRelation:
-    osm_id = int(element.attrib["id"])
-    members = [
-        models.OsmMember(
-            member_type=member.attrib["type"],
-            ref=int(member.attrib["ref"]),
-            role=member.attrib.get("role", ""),
-        )
-        for member in element.findall("member")
-    ]
+    try:
+        osm_id = int(element.attrib["id"])
+        members = [
+            models.OsmMember(
+                member_type=member.attrib["type"],
+                ref=int(member.attrib["ref"]),
+                role=member.attrib.get("role", ""),
+            )
+            for member in element.findall("member")
+        ]
+    except (KeyError, TypeError, ValueError) as err:
+        raise _invalid_element_error("relation", element, err) from err
     tags = {
         tag.attrib["k"]: tag.attrib["v"]
         for tag in element.findall("tag")
         if "k" in tag.attrib and "v" in tag.attrib
     }
     return models.OsmRelation(osm_id=osm_id, members=members, tags=tags)
+
+
+def _invalid_element_error(
+    kind: str,
+    element: ET.Element,
+    err: Exception,
+) -> OsmClientError:
+    """Builds OsmClientError for a malformed OSM XML element."""
+    element_id = element.attrib.get("id")
+    if isinstance(err, KeyError):
+        detail = f"missing {err.args[0]}"
+    else:
+        detail = str(err) or err.__class__.__name__
+    if element_id is not None:
+        return OsmClientError(
+            f"Invalid {kind} element id={element_id}: {detail}"
+        )
+    return OsmClientError(f"Invalid {kind} element: {detail}")
