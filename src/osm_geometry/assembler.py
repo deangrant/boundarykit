@@ -3,11 +3,27 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-import logging
 
 from osm_geometry import models
 
-_LOG = logging.getLogger(__name__)
+_WAY_NON_GEOMETRY_ROLES = frozenset(
+    {
+        "label",
+        "admin_centre",
+        "label_center",
+        "capital",
+        "subarea",
+    }
+)
+_RELATION_NON_GEOMETRY_ROLES = frozenset(
+    {
+        "label",
+        "admin_centre",
+        "label_center",
+        "capital",
+    }
+)
+_INCLUDE_RELATION_ROLES = frozenset({"", "outer", "subarea"})
 
 
 class AssemblyError(Exception):
@@ -45,7 +61,9 @@ class RelationAssembler:
             only contribute via children).
 
         Raises:
-            AssemblyError: If the relation is missing from the store.
+            AssemblyError: If the relation is missing, members are incomplete,
+                roles are invalid, rings cannot be chained uniquely, or inners
+                cannot be assigned to exactly one outer.
         """
         return self._assemble_recursive(store, relation_id, seen=set())
 
@@ -57,8 +75,9 @@ class RelationAssembler:
         seen: set[int],
     ) -> models.MultiPolygon:
         if relation_id in seen:
-            _LOG.warning("Skipping cyclic relation reference %s", relation_id)
-            return models.MultiPolygon(relation_id=relation_id)
+            raise AssemblyError(
+                f"Cyclic relation reference involving {relation_id}"
+            )
         seen.add(relation_id)
 
         relation = store.relations.get(relation_id)
@@ -73,17 +92,22 @@ class RelationAssembler:
         for member in relation.members:
             if member.member_type != "relation":
                 continue
+            role = member.role or ""
+            if role in _RELATION_NON_GEOMETRY_ROLES:
+                continue
+            if role == "inner":
+                raise AssemblyError(
+                    f"Unsupported nested relation role 'inner' for "
+                    f"relation {member.ref} on {relation.osm_id}"
+                )
+            if role not in _INCLUDE_RELATION_ROLES:
+                raise AssemblyError(
+                    f"Unknown relation member role {role!r} for "
+                    f"relation {member.ref} on {relation.osm_id}"
+                )
             if member.ref not in store.relations and self._fetch_missing:
                 store.merge(self._fetch_missing(member.ref))
-            try:
-                child = self._assemble_recursive(store, member.ref, seen=seen)
-            except AssemblyError as err:
-                _LOG.warning(
-                    "Could not assemble nested relation %s: %s",
-                    member.ref,
-                    err,
-                )
-                continue
+            child = self._assemble_recursive(store, member.ref, seen=seen)
             if not child.is_empty():
                 child_geoms.append(child)
 
@@ -107,22 +131,27 @@ class RelationAssembler:
         for member in relation.members:
             if member.member_type != "way":
                 continue
+            role = member.role or ""
+            if role in _WAY_NON_GEOMETRY_ROLES:
+                continue
+            if role not in ("", "outer", "inner"):
+                raise AssemblyError(
+                    f"Unknown way member role {role!r} for way "
+                    f"{member.ref} on relation {relation.osm_id}"
+                )
             way = store.ways.get(member.ref)
             if way is None:
-                _LOG.warning(
-                    "Missing way %s on relation %s",
-                    member.ref,
-                    relation.osm_id,
+                raise AssemblyError(
+                    f"Missing way {member.ref} on relation {relation.osm_id}"
                 )
-                continue
             line = self._way_coordinates(store, way)
             if len(line) < 2:
-                continue
-            role = member.role or "outer"
+                raise AssemblyError(
+                    f"Way {way.osm_id} has fewer than 2 resolvable nodes"
+                )
             if role == "inner":
                 inner_ways.append(line)
             else:
-                # Treat empty/label/outer and unknown area roles as outer.
                 outer_ways.append(line)
 
         outer_rings = _rings_from_ways(outer_ways)
@@ -140,8 +169,9 @@ class RelationAssembler:
         for node_id in way.node_ids:
             node = store.nodes.get(node_id)
             if node is None:
-                _LOG.warning("Missing node %s on way %s", node_id, way.osm_id)
-                continue
+                raise AssemblyError(
+                    f"Missing node {node_id} on way {way.osm_id}"
+                )
             points.append(node.coordinate)
         return points
 
@@ -149,65 +179,110 @@ class RelationAssembler:
 def _rings_from_ways(
     ways: Sequence[list[models.LatLon]],
 ) -> list[models.Ring]:
-    """Chains way polylines into closed rings by matching endpoints."""
+    """Chains way polylines into closed rings by matching endpoints.
+
+    More than one match at the same chain endpoint is treated as an
+    ambiguous junction. Unclosed chains raise AssemblyError.
+
+    Args:
+        ways: Way polylines with at least two points each.
+
+    Returns:
+        Closed rings assembled from the ways.
+
+    Raises:
+        AssemblyError: If chaining is ambiguous or a ring cannot close.
+    """
     remaining = [list(way) for way in ways if len(way) >= 2]
     rings: list[models.Ring] = []
     while remaining:
         chain = remaining.pop(0)
-        progressed = True
-        while progressed and not _is_closed_line(chain):
-            progressed = False
-            start = chain[0]
-            end = chain[-1]
-            for index, candidate in enumerate(remaining):
-                cand_start = candidate[0]
-                cand_end = candidate[-1]
-                if _same_point(end, cand_start):
-                    chain.extend(candidate[1:])
-                    remaining.pop(index)
-                    progressed = True
-                    break
-                if _same_point(end, cand_end):
-                    chain.extend(reversed(candidate[:-1]))
-                    remaining.pop(index)
-                    progressed = True
-                    break
-                if _same_point(start, cand_end):
-                    chain = candidate[:-1] + chain
-                    remaining.pop(index)
-                    progressed = True
-                    break
-                if _same_point(start, cand_start):
-                    chain = list(reversed(candidate[1:])) + chain
-                    remaining.pop(index)
-                    progressed = True
-                    break
-        if _is_closed_line(chain) and len(chain) >= 4:
-            rings.append(models.Ring(points=chain))
-        else:
-            _LOG.warning("Could not close ring from %s segments", len(chain))
+        while not _is_closed_line(chain):
+            end_matches = _end_matches(chain, remaining)
+            start_matches = _start_matches(chain, remaining)
+            if len(end_matches) > 1 or len(start_matches) > 1:
+                raise AssemblyError(
+                    "Ambiguous way junction: multiple endpoint matches"
+                )
+            if end_matches:
+                index, chain = end_matches[0]
+            elif start_matches:
+                index, chain = start_matches[0]
+            else:
+                raise AssemblyError(
+                    "Could not close ring: no matching way endpoint"
+                )
+            remaining.pop(index)
+        if len(chain) < 4:
+            raise AssemblyError("Closed ring has fewer than 4 vertices")
+        rings.append(models.Ring(points=chain))
     return rings
+
+
+def _end_matches(
+    chain: Sequence[models.LatLon],
+    remaining: Sequence[Sequence[models.LatLon]],
+) -> list[tuple[int, list[models.LatLon]]]:
+    """Returns (index, extended_chain) for ways that attach to chain[-1]."""
+    end = chain[-1]
+    matches: list[tuple[int, list[models.LatLon]]] = []
+    for index, candidate in enumerate(remaining):
+        if _same_point(end, candidate[0]):
+            matches.append((index, list(chain) + list(candidate[1:])))
+        elif _same_point(end, candidate[-1]):
+            matches.append(
+                (index, list(chain) + list(reversed(candidate[:-1])))
+            )
+    return matches
+
+
+def _start_matches(
+    chain: Sequence[models.LatLon],
+    remaining: Sequence[Sequence[models.LatLon]],
+) -> list[tuple[int, list[models.LatLon]]]:
+    """Returns (index, extended_chain) for ways that attach to chain[0]."""
+    start = chain[0]
+    matches: list[tuple[int, list[models.LatLon]]] = []
+    for index, candidate in enumerate(remaining):
+        if _same_point(start, candidate[-1]):
+            matches.append((index, list(candidate[:-1]) + list(chain)))
+        elif _same_point(start, candidate[0]):
+            matches.append((index, list(reversed(candidate[1:])) + list(chain)))
+    return matches
 
 
 def _assign_inners(
     outers: Sequence[models.Ring],
     inners: Sequence[models.Ring],
 ) -> list[models.Polygon]:
+    """Assigns each inner ring to exactly one containing outer.
+
+    Args:
+        outers: Outer rings.
+        inners: Inner rings to assign by point-in-polygon.
+
+    Returns:
+        Polygons with inners attached.
+
+    Raises:
+        AssemblyError: If an inner is inside zero or multiple outers.
+    """
     polygons = [models.Polygon(outer=outer, inners=[]) for outer in outers]
     for inner in inners:
         if not inner.points:
-            continue
+            raise AssemblyError("Inner ring has no points")
         probe = inner.points[0]
-        assigned = False
-        for polygon in polygons:
-            if _point_in_ring(probe, polygon.outer):
-                polygon.inners.append(inner)
-                assigned = True
-                break
-        if not assigned and polygons:
-            # Fall back to first outer when PIP is inconclusive.
-            polygons[0].inners.append(inner)
-            _LOG.warning("Assigned inner ring to first outer by fallback")
+        containing = [
+            polygon
+            for polygon in polygons
+            if _point_in_ring(probe, polygon.outer)
+        ]
+        if len(containing) != 1:
+            raise AssemblyError(
+                "Inner ring must be contained by exactly one outer "
+                f"(found {len(containing)})"
+            )
+        containing[0].inners.append(inner)
     return polygons
 
 
