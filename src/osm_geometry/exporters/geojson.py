@@ -35,8 +35,11 @@ class GeoJsonExporter:
     def _build(self, geometry: models.MultiPolygon) -> dict[str, Any]:
         coordinates = []
         for polygon in geometry.polygons:
-            rings = [_ring_coords(polygon.outer)]
-            rings.extend(_ring_coords(inner) for inner in polygon.inners)
+            rings = [_oriented_ring(polygon.outer, clockwise=False)]
+            rings.extend(
+                _oriented_ring(inner, clockwise=True)
+                for inner in polygon.inners
+            )
             coordinates.append(rings)
         geom_obj: dict[str, Any] = {
             "type": "MultiPolygon",
@@ -56,5 +59,31 @@ class GeoJsonExporter:
         }
 
 
-def _ring_coords(ring: models.Ring) -> list[list[float]]:
-    return [[point.lon, point.lat] for point in ring.points]
+def _signed_area(ring: models.Ring) -> float:
+    """Returns shoelace signed area (lon=x, lat=y); positive is CCW."""
+    pts = ring.points
+    if len(pts) < 2:
+        return 0.0
+    total = 0.0
+    for index in range(len(pts) - 1):
+        x1 = pts[index].lon
+        y1 = pts[index].lat
+        x2 = pts[index + 1].lon
+        y2 = pts[index + 1].lat
+        total += x1 * y2 - x2 * y1
+    return total / 2.0
+
+
+def _oriented_ring(ring: models.Ring, *, clockwise: bool) -> list[list[float]]:
+    """Returns [lon, lat] coords with RFC 7946 winding.
+
+    Args:
+        ring: Closed ring to export.
+        clockwise: True for holes (CW), False for exteriors (CCW).
+    """
+    points = list(ring.points)
+    area = _signed_area(ring)
+    is_clockwise = area < 0.0
+    if clockwise != is_clockwise and area != 0.0:
+        points = list(reversed(points))
+    return [[point.lon, point.lat] for point in points]

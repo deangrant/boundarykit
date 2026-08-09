@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import pathlib
+import re
 
 from osm_geometry import models
+
+_WHITESPACE = re.compile(r"\s+")
 
 
 class PolyExporter:
@@ -24,12 +27,7 @@ class PolyExporter:
 
     def dumps(self, geometry: models.MultiPolygon) -> str:
         """Returns .poly text for geometry."""
-        name = geometry.name or (
-            f"relation_{geometry.relation_id}"
-            if geometry.relation_id is not None
-            else "polygon"
-        )
-        lines = [name]
+        lines = [_poly_name(geometry)]
         ring_index = 1
         for polygon in geometry.polygons:
             lines.append(str(ring_index))
@@ -45,3 +43,17 @@ class PolyExporter:
                 lines.append("END")
         lines.append("END")
         return "\n".join(lines) + "\n"
+
+
+def _poly_name(geometry: models.MultiPolygon) -> str:
+    """Returns a single-line .poly header name safe for Osmosis parsers."""
+    fallback = (
+        f"relation_{geometry.relation_id}"
+        if geometry.relation_id is not None
+        else "polygon"
+    )
+    raw = geometry.name if geometry.name is not None else fallback
+    cleaned = _WHITESPACE.sub(" ", raw).strip()
+    if not cleaned or cleaned.upper() == "END" or cleaned.startswith("!"):
+        return fallback
+    return cleaned

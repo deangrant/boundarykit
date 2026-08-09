@@ -66,6 +66,47 @@ class ExportersTest(unittest.TestCase):
         self.assertEqual(payload["properties"]["osm_relation_id"], 42)
         self.assertEqual(payload["geometry"]["type"], "MultiPolygon")
 
+    def test_geojson_enforces_rfc7946_winding(self) -> None:
+        # Clockwise outer (lon/lat) and counterclockwise inner in source.
+        outer = models.Ring(
+            points=[
+                models.LatLon(0, 0),
+                models.LatLon(2, 0),
+                models.LatLon(2, 2),
+                models.LatLon(0, 2),
+                models.LatLon(0, 0),
+            ]
+        )
+        inner = models.Ring(
+            points=[
+                models.LatLon(0.5, 0.5),
+                models.LatLon(0.5, 1.5),
+                models.LatLon(1.5, 1.5),
+                models.LatLon(1.5, 0.5),
+                models.LatLon(0.5, 0.5),
+            ]
+        )
+        geom = models.MultiPolygon(
+            polygons=[models.Polygon(outer=outer, inners=[inner])]
+        )
+        payload = json.loads(geojson.GeoJsonExporter().dumps(geom))
+        outer_coords = payload["coordinates"][0][0]
+        inner_coords = payload["coordinates"][0][1]
+        self.assertGreater(_coords_signed_area(outer_coords), 0.0)
+        self.assertLess(_coords_signed_area(inner_coords), 0.0)
+
+    def test_poly_flattens_multiline_name(self) -> None:
+        geom = _sample_geometry()
+        geom.name = "Line One\nLine Two"
+        text = poly.PolyExporter().dumps(geom)
+        self.assertEqual(text.splitlines()[0], "Line One Line Two")
+
+    def test_poly_end_name_falls_back_to_relation_id(self) -> None:
+        geom = _sample_geometry()
+        geom.name = "END"
+        text = poly.PolyExporter().dumps(geom)
+        self.assertEqual(text.splitlines()[0], "relation_42")
+
     def test_wkt_and_ewkt(self) -> None:
         wkt_text = wkt.WktExporter().dumps(_sample_geometry())
         self.assertTrue(wkt_text.startswith("MULTIPOLYGON"))
@@ -84,6 +125,16 @@ class ExportersTest(unittest.TestCase):
             wkt.WktExporter().export(_sample_geometry(), path)
             self.assertTrue(path.is_file())
             self.assertIn("MULTIPOLYGON", path.read_text(encoding="utf-8"))
+
+
+def _coords_signed_area(coords: list[list[float]]) -> float:
+    """Shoelace signed area for [lon, lat] rings; positive is CCW."""
+    total = 0.0
+    for index in range(len(coords) - 1):
+        x1, y1 = coords[index]
+        x2, y2 = coords[index + 1]
+        total += x1 * y2 - x2 * y1
+    return total / 2.0
 
 
 if __name__ == "__main__":
