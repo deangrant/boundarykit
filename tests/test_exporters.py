@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import tempfile
 import unittest
 
@@ -118,6 +119,41 @@ class ExportersTest(unittest.TestCase):
         self.assertIn("<svg", svg_text)
         self.assertIn("<path", svg_text)
         self.assertIn("Sample", svg_text)
+
+    def test_svg_preserves_aspect_ratio(self) -> None:
+        # Wide rectangle: lon span 4, lat span 1 — must not stretch to canvas.
+        outer = models.Ring(
+            points=[
+                models.LatLon(0, 0),
+                models.LatLon(0, 4),
+                models.LatLon(1, 4),
+                models.LatLon(1, 0),
+                models.LatLon(0, 0),
+            ]
+        )
+        geom = models.MultiPolygon(
+            polygons=[models.Polygon(outer=outer)],
+            name="Wide",
+        )
+        exporter = svg.SvgExporter(width=800, height=600, padding=0.0)
+        text = exporter.dumps(geom)
+        match = re.search(
+            r"M([0-9.]+),([0-9.]+) L([0-9.]+),([0-9.]+) "
+            r"L([0-9.]+),([0-9.]+)",
+            text,
+        )
+        self.assertIsNotNone(match)
+        assert match is not None
+        x0 = float(match.group(1))
+        x1 = float(match.group(3))
+        y1 = float(match.group(4))
+        y2 = float(match.group(6))
+        pixel_width = abs(x1 - x0)
+        pixel_height = abs(y2 - y1)
+        # Geographic aspect lon/lat = 4/1; pixel aspect should match.
+        self.assertAlmostEqual(pixel_width / pixel_height, 4.0, places=2)
+        self.assertLessEqual(pixel_width, 800.0)
+        self.assertLess(pixel_height, 600.0)
 
     def test_export_writes_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

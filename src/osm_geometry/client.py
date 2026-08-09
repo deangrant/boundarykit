@@ -10,12 +10,13 @@ from urllib import error as urllib_error
 from urllib import request as urllib_request
 import xml.etree.ElementTree as ET
 
+from osm_geometry import __version__
 from osm_geometry import models
 
 _LOG = logging.getLogger(__name__)
 
 _DEFAULT_BASE_URL = "https://api.openstreetmap.org/api/0.6"
-_USER_AGENT = "osm-geometry/0.1"
+_USER_AGENT = f"osm-geometry/{__version__}"
 _DEFAULT_MAX_RESPONSE_BYTES = 32 * 1024 * 1024
 _DEFAULT_MIN_REQUEST_INTERVAL_SECONDS = 1.0
 _DEFAULT_MAX_RETRIES = 3
@@ -95,21 +96,6 @@ class OsmApiClient:
             OsmClientError: On HTTP, size, budget, or parse failure.
         """
         url = f"{self._base_url}/relation/{relation_id}/full"
-        return self._fetch_store(url)
-
-    def fetch_relation(self, relation_id: int) -> models.ElementStore:
-        """Downloads a bare relation document (no members expanded).
-
-        Args:
-            relation_id: OSM relation id.
-
-        Returns:
-            Parsed element store.
-
-        Raises:
-            OsmClientError: On HTTP, size, budget, or parse failure.
-        """
-        url = f"{self._base_url}/relation/{relation_id}"
         return self._fetch_store(url)
 
     def _fetch_store(self, url: str) -> models.ElementStore:

@@ -103,14 +103,6 @@ class MultiPolygon:
         """Returns True when there are no polygons."""
         return not self.polygons
 
-    def merge(self, other: MultiPolygon) -> MultiPolygon:
-        """Returns a new multipolygon combining both geometries."""
-        return MultiPolygon(
-            polygons=[*self.polygons, *other.polygons],
-            relation_id=self.relation_id,
-            name=self.name or other.name,
-        )
-
     def bbox(self) -> tuple[float, float, float, float] | None:
         """Returns (min_lon, min_lat, max_lon, max_lat) or None if empty."""
         lons: list[float] = []

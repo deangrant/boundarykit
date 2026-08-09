@@ -260,6 +260,62 @@ class RelationAssemblerTest(unittest.TestCase):
         with self.assertRaises(assembler.AssemblyError):
             assembler.RelationAssembler().assemble(store, 100)
 
+    def test_shared_nested_relation_is_not_cyclic(self) -> None:
+        # Parent references the same child twice (shared nested ref / diamond).
+        child_nodes = _closed_square_nodes(1, (0.0, 0.0), 1.0)
+        store = models.ElementStore(
+            nodes={n.osm_id: n for n in child_nodes},
+            ways={10: _way(10, [1, 2, 3, 4, 1])},
+            relations={
+                200: models.OsmRelation(
+                    osm_id=200,
+                    members=[_member("way", 10, "outer")],
+                    tags={"type": "multipolygon"},
+                ),
+                100: models.OsmRelation(
+                    osm_id=100,
+                    members=[
+                        _member("relation", 200, "subarea"),
+                        _member("relation", 200, "subarea"),
+                    ],
+                    tags={"type": "boundary", "name": "Parent"},
+                ),
+            },
+        )
+        geom = assembler.RelationAssembler().assemble(store, 100)
+        self.assertEqual(len(geom.polygons), 2)
+        self.assertEqual(geom.name, "Parent")
+
+    def test_true_relation_cycle_raises(self) -> None:
+        nodes_a = _closed_square_nodes(1, (0.0, 0.0), 1.0)
+        nodes_b = _closed_square_nodes(10, (5.0, 5.0), 1.0)
+        store = models.ElementStore(
+            nodes={n.osm_id: n for n in (*nodes_a, *nodes_b)},
+            ways={
+                10: _way(10, [1, 2, 3, 4, 1]),
+                20: _way(20, [10, 11, 12, 13, 10]),
+            },
+            relations={
+                100: models.OsmRelation(
+                    osm_id=100,
+                    members=[
+                        _member("way", 10, "outer"),
+                        _member("relation", 200, "subarea"),
+                    ],
+                ),
+                200: models.OsmRelation(
+                    osm_id=200,
+                    members=[
+                        _member("way", 20, "outer"),
+                        _member("relation", 100, "subarea"),
+                    ],
+                ),
+            },
+        )
+        with self.assertRaises(assembler.AssemblyError) as ctx:
+            assembler.RelationAssembler().assemble(store, 100)
+        self.assertIn("Cyclic", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

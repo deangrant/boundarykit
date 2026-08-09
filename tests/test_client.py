@@ -7,6 +7,7 @@ import pathlib
 import unittest
 from urllib import error as urllib_error
 
+from osm_geometry import __version__
 from osm_geometry import client
 
 _FIXTURES = pathlib.Path(__file__).parent / "fixtures"
@@ -104,6 +105,11 @@ class _FakeClock:
 
 class OsmApiClientLimitsTest(unittest.TestCase):
     """Tests OsmApiClient size, budget, throttle, and retry behavior."""
+
+    def test_default_user_agent_matches_package_version(self) -> None:
+        osm_client = client.OsmApiClient(min_request_interval_seconds=0)
+        # pylint: disable-next=protected-access
+        self.assertEqual(osm_client._user_agent, f"osm-geometry/{__version__}")
 
     def test_oversized_body_raises(self) -> None:
         body = b"x" * 100

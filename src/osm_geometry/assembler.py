@@ -62,64 +62,86 @@ class RelationAssembler:
 
         Raises:
             AssemblyError: If the relation is missing, members are incomplete,
-                roles are invalid, rings cannot be chained uniquely, or inners
-                cannot be assigned to exactly one outer.
+                roles are invalid, rings cannot be chained uniquely, inners
+                cannot be assigned to exactly one outer, or a true cycle is
+                detected in nested relation membership.
         """
-        return self._assemble_recursive(store, relation_id, seen=set())
+        return self._assemble_recursive(
+            store,
+            relation_id,
+            path=set(),
+            cache={},
+        )
 
     def _assemble_recursive(
         self,
         store: models.ElementStore,
         relation_id: int,
         *,
-        seen: set[int],
+        path: set[int],
+        cache: dict[int, models.MultiPolygon],
     ) -> models.MultiPolygon:
-        if relation_id in seen:
+        if relation_id in path:
             raise AssemblyError(
                 f"Cyclic relation reference involving {relation_id}"
             )
-        seen.add(relation_id)
+        cached = cache.get(relation_id)
+        if cached is not None:
+            return cached
 
-        relation = store.relations.get(relation_id)
-        if relation is None and self._fetch_missing is not None:
-            store.merge(self._fetch_missing(relation_id))
+        path.add(relation_id)
+        try:
             relation = store.relations.get(relation_id)
-        if relation is None:
-            raise AssemblyError(f"Relation {relation_id} not found in store")
-
-        own = self._assemble_own_polygons(store, relation)
-        child_geoms: list[models.MultiPolygon] = []
-        for member in relation.members:
-            if member.member_type != "relation":
-                continue
-            role = member.role or ""
-            if role in _RELATION_NON_GEOMETRY_ROLES:
-                continue
-            if role == "inner":
+            if relation is None and self._fetch_missing is not None:
+                store.merge(self._fetch_missing(relation_id))
+                relation = store.relations.get(relation_id)
+            if relation is None:
                 raise AssemblyError(
-                    f"Unsupported nested relation role 'inner' for "
-                    f"relation {member.ref} on {relation.osm_id}"
+                    f"Relation {relation_id} not found in store"
                 )
-            if role not in _INCLUDE_RELATION_ROLES:
-                raise AssemblyError(
-                    f"Unknown relation member role {role!r} for "
-                    f"relation {member.ref} on {relation.osm_id}"
-                )
-            if member.ref not in store.relations and self._fetch_missing:
-                store.merge(self._fetch_missing(member.ref))
-            child = self._assemble_recursive(store, member.ref, seen=seen)
-            if not child.is_empty():
-                child_geoms.append(child)
 
-        polygons = list(own)
-        for geom in child_geoms:
-            for polygon in geom.polygons:
-                polygons.append(polygon)
-        return models.MultiPolygon(
-            polygons=polygons,
-            relation_id=relation_id,
-            name=relation.name,
-        )
+            own = self._assemble_own_polygons(store, relation)
+            child_geoms: list[models.MultiPolygon] = []
+            for member in relation.members:
+                if member.member_type != "relation":
+                    continue
+                role = member.role or ""
+                if role in _RELATION_NON_GEOMETRY_ROLES:
+                    continue
+                if role == "inner":
+                    raise AssemblyError(
+                        f"Unsupported nested relation role 'inner' for "
+                        f"relation {member.ref} on {relation.osm_id}"
+                    )
+                if role not in _INCLUDE_RELATION_ROLES:
+                    raise AssemblyError(
+                        f"Unknown relation member role {role!r} for "
+                        f"relation {member.ref} on {relation.osm_id}"
+                    )
+                if member.ref not in store.relations and self._fetch_missing:
+                    store.merge(self._fetch_missing(member.ref))
+                child = self._assemble_recursive(
+                    store,
+                    member.ref,
+                    path=path,
+                    cache=cache,
+                )
+                if not child.is_empty():
+                    child_geoms.append(child)
+
+            polygons = list(own)
+            for geom in child_geoms:
+                for polygon in geom.polygons:
+                    polygons.append(polygon)
+            result = models.MultiPolygon(
+                polygons=polygons,
+                relation_id=relation_id,
+                name=relation.name,
+            )
+            cache[relation_id] = result
+            return result
+        finally:
+            path.discard(relation_id)
 
     def _assemble_own_polygons(
         self,

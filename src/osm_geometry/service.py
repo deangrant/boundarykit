@@ -32,7 +32,8 @@ class RelationGeometryService:
         Args:
             osm_client: Fetches OSM relation payloads.
             relation_assembler: Builds multipolygons from element stores.
-            geometry_simplifier: Optional vertex simplification.
+            geometry_simplifier: Applies optional Douglas–Peucker
+                simplification.
             exporters: Format id to exporter implementations.
         """
         self._client = osm_client
@@ -88,7 +89,9 @@ class RelationGeometryService:
         Raises:
             ValueError: On unknown format or invalid path combination.
         """
-        normalized = [fmt.strip().lower() for fmt in formats if fmt.strip()]
+        normalized = _dedupe_formats(
+            fmt.strip().lower() for fmt in formats if fmt.strip()
+        )
         if not normalized:
             raise ValueError("At least one export format is required")
 
@@ -157,6 +160,18 @@ class RelationGeometryService:
             output=output,
             output_dir=output_dir,
         )
+
+
+def _dedupe_formats(formats: Iterable[str]) -> list[str]:
+    """Returns format ids in order with duplicates removed."""
+    seen: set[str] = set()
+    unique: list[str] = []
+    for fmt in formats:
+        if fmt in seen:
+            continue
+        seen.add(fmt)
+        unique.append(fmt)
+    return unique
 
 
 def _safe_filename(name: str) -> str:
