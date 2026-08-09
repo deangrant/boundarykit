@@ -2,11 +2,24 @@
 
 from __future__ import annotations
 
+import dataclasses
+import math
+
 from osm_geometry import models
+
+_METERS_PER_DEGREE = 111_320.0
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _XY:
+    """Projected planar coordinates in meters."""
+
+    x: float
+    y: float
 
 
 class GeometrySimplifier:
-    """Simplifies multipolygon rings with Douglas–Peucker."""
+    """Simplifies multipolygon rings with meter-space Douglas–Peucker."""
 
     def simplify(
         self,
@@ -17,22 +30,18 @@ class GeometrySimplifier:
 
         Args:
             geometry: Source multipolygon.
-            tolerance: Maximum perpendicular distance in degrees. None or
-                values <= 0 leave geometry unchanged.
+            tolerance: Maximum perpendicular distance in meters under a
+                local equirectangular projection. None or values <= 0 leave
+                geometry unchanged.
 
         Returns:
-            Simplified multipolygon (new instance when changed).
+            Simplified multipolygon (new instance when changed). Rings that
+            would become topologically invalid are left unchanged.
         """
         if tolerance is None or tolerance <= 0:
             return geometry
         polygons = [
-            models.Polygon(
-                outer=self._simplify_ring(polygon.outer, tolerance),
-                inners=[
-                    self._simplify_ring(inner, tolerance)
-                    for inner in polygon.inners
-                ],
-            )
+            self._simplify_polygon(polygon, tolerance)
             for polygon in geometry.polygons
         ]
         return models.MultiPolygon(
@@ -40,6 +49,21 @@ class GeometrySimplifier:
             relation_id=geometry.relation_id,
             name=geometry.name,
         )
+
+    def _simplify_polygon(
+        self,
+        polygon: models.Polygon,
+        tolerance: float,
+    ) -> models.Polygon:
+        outer = self._simplify_ring(polygon.outer, tolerance)
+        inners: list[models.Ring] = []
+        for inner in polygon.inners:
+            candidate = self._simplify_ring(inner, tolerance)
+            if candidate.points and _point_in_ring(candidate.points[0], outer):
+                inners.append(candidate)
+            else:
+                inners.append(inner)
+        return models.Polygon(outer=outer, inners=inners)
 
     def _simplify_ring(
         self, ring: models.Ring, tolerance: float
@@ -51,31 +75,47 @@ class GeometrySimplifier:
             points[0].lat == points[-1].lat and points[0].lon == points[-1].lon
         )
         work = points[:-1] if closed else points
-        simplified = _douglas_peucker(work, tolerance)
+        if len(work) < 3:
+            return ring
+
+        projected = _project_meters(work)
+        keep_indices = _douglas_peucker_indices(projected, tolerance)
+        simplified = [work[i] for i in keep_indices]
         if len(simplified) < 3:
             return ring
         if closed:
             simplified = [*simplified, simplified[0]]
-        return models.Ring(points=simplified)
+        candidate = models.Ring(points=simplified)
+        if not _is_valid_ring(candidate):
+            return ring
+        return candidate
 
 
-def _douglas_peucker(
-    points: list[models.LatLon], tolerance: float
-) -> list[models.LatLon]:
-    """Simplifies a polyline with iterative Douglas–Peucker.
+def _project_meters(points: list[models.LatLon]) -> list[_XY]:
+    """Projects WGS84 points to local equirectangular meters."""
+    lat0 = sum(point.lat for point in points) / len(points)
+    lon0 = sum(point.lon for point in points) / len(points)
+    cos_lat = math.cos(math.radians(lat0))
+    projected: list[_XY] = []
+    for point in points:
+        x = (point.lon - lon0) * cos_lat * _METERS_PER_DEGREE
+        y = (point.lat - lat0) * _METERS_PER_DEGREE
+        projected.append(_XY(x=x, y=y))
+    return projected
 
-    Uses an explicit stack of index ranges so large rings cannot raise
-    RecursionError.
+
+def _douglas_peucker_indices(points: list[_XY], tolerance: float) -> list[int]:
+    """Returns ascending indices kept by iterative Douglas–Peucker.
 
     Args:
-        points: Open polyline (first != last for closed rings).
-        tolerance: Maximum perpendicular distance in degrees.
+        points: Open polyline in planar meters.
+        tolerance: Maximum perpendicular distance in meters.
 
     Returns:
-        Simplified polyline preserving original endpoint order.
+        Sorted vertex indices to retain.
     """
     if len(points) < 3:
-        return list(points)
+        return list(range(len(points)))
 
     keep = [False] * len(points)
     keep[0] = True
@@ -98,25 +138,98 @@ def _douglas_peucker(
             stack.append((start_idx, index))
             stack.append((index, end_idx))
 
-    return [point for point, retained in zip(points, keep) if retained]
+    return [i for i, retained in enumerate(keep) if retained]
 
 
-def _perpendicular_distance(
-    point: models.LatLon,
-    start: models.LatLon,
-    end: models.LatLon,
-) -> float:
-    """Returns perpendicular distance from point to segment in degree space."""
-    dx = end.lon - start.lon
-    dy = end.lat - start.lat
+def _perpendicular_distance(point: _XY, start: _XY, end: _XY) -> float:
+    """Returns perpendicular distance from point to segment in meters."""
+    dx = end.x - start.x
+    dy = end.y - start.y
     if dx == 0 and dy == 0:
-        return (
-            (point.lon - start.lon) ** 2 + (point.lat - start.lat) ** 2
-        ) ** 0.5
-    t = ((point.lon - start.lon) * dx + (point.lat - start.lat) * dy) / (
+        return ((point.x - start.x) ** 2 + (point.y - start.y) ** 2) ** 0.5
+    t = ((point.x - start.x) * dx + (point.y - start.y) * dy) / (
         dx * dx + dy * dy
     )
     t = max(0.0, min(1.0, t))
-    proj_lon = start.lon + t * dx
-    proj_lat = start.lat + t * dy
-    return ((point.lon - proj_lon) ** 2 + (point.lat - proj_lat) ** 2) ** 0.5
+    proj_x = start.x + t * dx
+    proj_y = start.y + t * dy
+    return ((point.x - proj_x) ** 2 + (point.y - proj_y) ** 2) ** 0.5
+
+
+def _is_valid_ring(ring: models.Ring) -> bool:
+    """Returns True when ring is closed, large enough, and simple."""
+    if not ring.is_closed() or len(ring.points) < 4:
+        return False
+    return not _ring_self_intersects(ring)
+
+
+def _ring_self_intersects(ring: models.Ring) -> bool:
+    """Returns True when a closed ring has crossing non-adjacent edges."""
+    pts = ring.points
+    # Last point duplicates the first for a closed ring.
+    n = len(pts) - 1
+    if n < 4:
+        return False
+    for i in range(n):
+        a1 = pts[i]
+        a2 = pts[(i + 1) % n]
+        for j in range(i + 1, n):
+            # Skip adjacent edges and the closing edge pair (0, n-1).
+            if abs(i - j) <= 1:
+                continue
+            if i == 0 and j == n - 1:
+                continue
+            b1 = pts[j]
+            b2 = pts[(j + 1) % n]
+            if _segments_intersect(a1, a2, b1, b2):
+                return True
+    return False
+
+
+def _segments_intersect(
+    a1: models.LatLon,
+    a2: models.LatLon,
+    b1: models.LatLon,
+    b2: models.LatLon,
+) -> bool:
+    """Proper intersection of open segments in lon/lat plane (topology)."""
+    o1 = _orient(a1, a2, b1)
+    o2 = _orient(a1, a2, b2)
+    o3 = _orient(b1, b2, a1)
+    o4 = _orient(b1, b2, a2)
+    if o1 == 0 or o2 == 0 or o3 == 0 or o4 == 0:
+        # Treat touching/collinear as non-crossing for simplification guards.
+        return False
+    return o1 != o2 and o3 != o4
+
+
+def _orient(a: models.LatLon, b: models.LatLon, c: models.LatLon) -> int:
+    """Returns 1/0/-1 for left/on/right turn using lon as x and lat as y."""
+    value = (b.lon - a.lon) * (c.lat - a.lat) - (b.lat - a.lat) * (
+        c.lon - a.lon
+    )
+    if value > 0:
+        return 1
+    if value < 0:
+        return -1
+    return 0
+
+
+def _point_in_ring(point: models.LatLon, ring: models.Ring) -> bool:
+    """Ray-casting point-in-polygon test (lon/lat as x/y)."""
+    x = point.lon
+    y = point.lat
+    inside = False
+    pts = ring.points
+    j = len(pts) - 1
+    for i, pi in enumerate(pts):
+        pj = pts[j]
+        intersects = ((pi.lat > y) != (pj.lat > y)) and (
+            x
+            < (pj.lon - pi.lon) * (y - pi.lat) / (pj.lat - pi.lat + 0.0)
+            + pi.lon
+        )
+        if intersects:
+            inside = not inside
+        j = i
+    return inside

@@ -54,8 +54,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--simplify",
         type=float,
         default=None,
-        metavar="DEG",
-        help="Optional Douglas–Peucker tolerance in degrees",
+        metavar="METERS",
+        help=(
+            "Optional Douglas–Peucker tolerance in meters "
+            "(local equirectangular projection)"
+        ),
     )
     parser.add_argument(
         "--ewkt",

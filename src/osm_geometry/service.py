@@ -49,7 +49,7 @@ class RelationGeometryService:
 
         Args:
             relation_id: OSM relation id.
-            simplify_tolerance: Optional Douglas–Peucker tolerance in degrees.
+            simplify_tolerance: Optional Douglas–Peucker tolerance in meters.
 
         Returns:
             Assembled (and optionally simplified) multipolygon.
