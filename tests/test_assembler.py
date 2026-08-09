@@ -316,6 +316,160 @@ class RelationAssemblerTest(unittest.TestCase):
             assembler.RelationAssembler().assemble(store, 100)
         self.assertIn("Cyclic", str(ctx.exception))
 
+    def test_multi_outer_two_inners_ownership(self) -> None:
+        outer_a = _closed_square_nodes(1, (0.0, 0.0), 2.0)
+        outer_b = _closed_square_nodes(10, (10.0, 10.0), 2.0)
+        inner_a = _closed_square_nodes(20, (0.5, 0.5), 0.5)
+        inner_b = _closed_square_nodes(30, (10.5, 10.5), 0.5)
+        store = models.ElementStore(
+            nodes={
+                n.osm_id: n for n in (*outer_a, *outer_b, *inner_a, *inner_b)
+            },
+            ways={
+                100: _way(100, [1, 2, 3, 4, 1]),
+                101: _way(101, [10, 11, 12, 13, 10]),
+                102: _way(102, [20, 21, 22, 23, 20]),
+                103: _way(103, [30, 31, 32, 33, 30]),
+            },
+            relations={
+                1: models.OsmRelation(
+                    osm_id=1,
+                    members=[
+                        _member("way", 100, "outer"),
+                        _member("way", 101, "outer"),
+                        _member("way", 102, "inner"),
+                        _member("way", 103, "inner"),
+                    ],
+                )
+            },
+        )
+        geom = assembler.RelationAssembler().assemble(store, 1)
+        self.assertEqual(len(geom.polygons), 2)
+        ownership = {
+            polygon.outer.points[0]: len(polygon.inners)
+            for polygon in geom.polygons
+        }
+        self.assertEqual(ownership[models.LatLon(0.0, 0.0)], 1)
+        self.assertEqual(ownership[models.LatLon(10.0, 10.0)], 1)
+        for polygon in geom.polygons:
+            self.assertEqual(len(polygon.inners), 1)
+            probe = polygon.inners[0].points[0]
+            # pylint: disable-next=protected-access
+            self.assertTrue(assembler._point_in_ring(probe, polygon.outer))
+
+    def test_inner_role_casing(self) -> None:
+        outer_nodes = _closed_square_nodes(1, (0.0, 0.0), 2.0)
+        inner_nodes = _closed_square_nodes(10, (0.5, 0.5), 0.5)
+        store = models.ElementStore(
+            nodes={n.osm_id: n for n in (*outer_nodes, *inner_nodes)},
+            ways={
+                100: _way(100, [1, 2, 3, 4, 1]),
+                101: _way(101, [10, 11, 12, 13, 10]),
+            },
+            relations={
+                1: models.OsmRelation(
+                    osm_id=1,
+                    members=[
+                        _member("way", 100, "OUTER"),
+                        _member("way", 101, "INNER"),
+                    ],
+                )
+            },
+        )
+        geom = assembler.RelationAssembler().assemble(store, 1)
+        self.assertEqual(len(geom.polygons), 1)
+        self.assertEqual(len(geom.polygons[0].inners), 1)
+
+    def test_fetch_missing_root_invoked_and_merged(self) -> None:
+        nodes = _closed_square_nodes(1, (0.0, 0.0), 1.0)
+        fetched = models.ElementStore(
+            nodes={n.osm_id: n for n in nodes},
+            ways={10: _way(10, [1, 2, 3, 4, 1])},
+            relations={
+                100: models.OsmRelation(
+                    osm_id=100,
+                    members=[_member("way", 10, "outer")],
+                    tags={"name": "Fetched"},
+                )
+            },
+        )
+        calls: list[int] = []
+
+        def fetch_missing(relation_id: int) -> models.ElementStore:
+            calls.append(relation_id)
+            return fetched
+
+        store = models.ElementStore()
+        geom = assembler.RelationAssembler(
+            fetch_missing=fetch_missing
+        ).assemble(store, 100)
+        self.assertEqual(calls, [100])
+        self.assertEqual(len(geom.polygons), 1)
+        self.assertEqual(geom.name, "Fetched")
+        self.assertIn(100, store.relations)
+
+    def test_fetch_missing_nested_child_invoked_and_merged(self) -> None:
+        parent_nodes = _closed_square_nodes(1, (0.0, 0.0), 1.0)
+        child_nodes = _closed_square_nodes(10, (5.0, 5.0), 1.0)
+        child_store = models.ElementStore(
+            nodes={n.osm_id: n for n in child_nodes},
+            ways={20: _way(20, [10, 11, 12, 13, 10])},
+            relations={
+                200: models.OsmRelation(
+                    osm_id=200,
+                    members=[_member("way", 20, "outer")],
+                    tags={"type": "multipolygon"},
+                )
+            },
+        )
+        store = models.ElementStore(
+            nodes={n.osm_id: n for n in parent_nodes},
+            ways={10: _way(10, [1, 2, 3, 4, 1])},
+            relations={
+                100: models.OsmRelation(
+                    osm_id=100,
+                    members=[
+                        _member("way", 10, "outer"),
+                        _member("relation", 200, "subarea"),
+                    ],
+                    tags={"type": "boundary", "name": "Parent"},
+                )
+            },
+        )
+        calls: list[int] = []
+
+        def fetch_missing(relation_id: int) -> models.ElementStore:
+            calls.append(relation_id)
+            return child_store
+
+        geom = assembler.RelationAssembler(
+            fetch_missing=fetch_missing
+        ).assemble(store, 100)
+        self.assertEqual(calls, [200])
+        self.assertEqual(len(geom.polygons), 2)
+        self.assertIn(200, store.relations)
+
+    def test_missing_relation_without_fetch_missing_raises(self) -> None:
+        store = models.ElementStore()
+        with self.assertRaises(assembler.AssemblyError) as ctx:
+            assembler.RelationAssembler().assemble(store, 100)
+        self.assertIn("not found", str(ctx.exception))
+
+    def test_messy_multipolygon_fixture(self) -> None:
+        store = client.parse_osm_xml(
+            (_FIXTURES / "messy_multipolygon.xml").read_bytes()
+        )
+        geom = assembler.RelationAssembler().assemble(store, 100)
+        self.assertEqual(len(geom.polygons), 2)
+        self.assertEqual(geom.name, "Messy Parent")
+        parent_polys = [
+            polygon
+            for polygon in geom.polygons
+            if polygon.outer.points[0] == models.LatLon(0.0, 0.0)
+        ]
+        self.assertEqual(len(parent_polys), 1)
+        self.assertEqual(len(parent_polys[0].inners), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

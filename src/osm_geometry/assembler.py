@@ -105,7 +105,7 @@ class RelationAssembler:
             for member in relation.members:
                 if member.member_type != "relation":
                     continue
-                role = member.role or ""
+                role = (member.role or "").casefold()
                 if role in _RELATION_NON_GEOMETRY_ROLES:
                     continue
                 if role == "inner":
@@ -153,7 +153,7 @@ class RelationAssembler:
         for member in relation.members:
             if member.member_type != "way":
                 continue
-            role = member.role or ""
+            role = (member.role or "").casefold()
             if role in _WAY_NON_GEOMETRY_ROLES:
                 continue
             if role not in ("", "outer", "inner"):

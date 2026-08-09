@@ -66,6 +66,45 @@ class ParseOsmXmlTest(unittest.TestCase):
             client.parse_osm_xml(payload)
         self.assertIn("missing type", str(ctx.exception))
 
+    def test_invalid_xml_raises_osm_client_error(self) -> None:
+        with self.assertRaises(client.OsmClientError) as ctx:
+            client.parse_osm_xml(b"<osm><node></osm>")
+        self.assertIn("Invalid OSM XML", str(ctx.exception))
+
+    def test_node_missing_id_raises_osm_client_error(self) -> None:
+        payload = b"""<?xml version="1.0"?>
+        <osm version="0.6">
+          <node lat="0" lon="0"/>
+        </osm>
+        """
+        with self.assertRaises(client.OsmClientError) as ctx:
+            client.parse_osm_xml(payload)
+        self.assertIn("missing id", str(ctx.exception))
+
+    def test_node_missing_lon_raises_osm_client_error(self) -> None:
+        payload = b"""<?xml version="1.0"?>
+        <osm version="0.6">
+          <node id="1" lat="0"/>
+        </osm>
+        """
+        with self.assertRaises(client.OsmClientError) as ctx:
+            client.parse_osm_xml(payload)
+        self.assertIn("missing lon", str(ctx.exception))
+
+    def test_relation_member_missing_ref_raises_osm_client_error(
+        self,
+    ) -> None:
+        payload = b"""<?xml version="1.0"?>
+        <osm version="0.6">
+          <relation id="100">
+            <member type="way" role="outer"/>
+          </relation>
+        </osm>
+        """
+        with self.assertRaises(client.OsmClientError) as ctx:
+            client.parse_osm_xml(payload)
+        self.assertIn("missing ref", str(ctx.exception))
+
 
 class _FakeResponse:
     """Minimal urlopen response supporting chunked reads."""
@@ -234,6 +273,99 @@ class OsmApiClientLimitsTest(unittest.TestCase):
         self.assertIn("HTTP 429", str(ctx.exception))
         # Attempts: initial + 2 retries => 2 backoff sleeps (1s, 2s).
         self.assertEqual(clock.sleeps, [1.0, 2.0])
+
+    def test_http_404_raises_without_retry(self) -> None:
+        clock = _FakeClock()
+        calls = {"n": 0}
+
+        def fake_urlopen(req: object, timeout: float = 0) -> _FakeResponse:
+            del req, timeout  # Unused.
+            calls["n"] += 1
+            raise urllib_error.HTTPError(
+                "http://example.test/relation/1/full",
+                404,
+                "Not Found",
+                {},
+                None,
+            )
+
+        osm_client = client.OsmApiClient(
+            urlopen=fake_urlopen,
+            min_request_interval_seconds=0,
+            max_retries=3,
+            max_relation_fetches=5,
+            sleep=clock.sleep,
+            monotonic=clock.monotonic,
+        )
+        with self.assertRaises(client.OsmClientError) as ctx:
+            osm_client.fetch_relation_full(1)
+        self.assertIn("HTTP 404", str(ctx.exception))
+        self.assertEqual(calls["n"], 1)
+        self.assertEqual(clock.sleeps, [])
+
+    def test_http_410_raises_without_retry(self) -> None:
+        def fake_urlopen(req: object, timeout: float = 0) -> _FakeResponse:
+            del req, timeout  # Unused.
+            raise urllib_error.HTTPError(
+                "http://example.test/relation/1/full",
+                410,
+                "Gone",
+                {},
+                None,
+            )
+
+        osm_client = client.OsmApiClient(
+            urlopen=fake_urlopen,
+            min_request_interval_seconds=0,
+            max_retries=3,
+            max_relation_fetches=5,
+        )
+        with self.assertRaises(client.OsmClientError) as ctx:
+            osm_client.fetch_relation_full(1)
+        self.assertIn("HTTP 410", str(ctx.exception))
+
+    def test_http_500_raises_without_retry(self) -> None:
+        clock = _FakeClock()
+        calls = {"n": 0}
+
+        def fake_urlopen(req: object, timeout: float = 0) -> _FakeResponse:
+            del req, timeout  # Unused.
+            calls["n"] += 1
+            raise urllib_error.HTTPError(
+                "http://example.test/relation/1/full",
+                500,
+                "Internal Server Error",
+                {},
+                None,
+            )
+
+        osm_client = client.OsmApiClient(
+            urlopen=fake_urlopen,
+            min_request_interval_seconds=0,
+            max_retries=3,
+            max_relation_fetches=5,
+            sleep=clock.sleep,
+            monotonic=clock.monotonic,
+        )
+        with self.assertRaises(client.OsmClientError) as ctx:
+            osm_client.fetch_relation_full(1)
+        self.assertIn("HTTP 500", str(ctx.exception))
+        self.assertEqual(calls["n"], 1)
+        self.assertEqual(clock.sleeps, [])
+
+    def test_urlerror_raises_osm_client_error(self) -> None:
+        def fake_urlopen(req: object, timeout: float = 0) -> _FakeResponse:
+            del req, timeout  # Unused.
+            raise urllib_error.URLError("connection refused")
+
+        osm_client = client.OsmApiClient(
+            urlopen=fake_urlopen,
+            min_request_interval_seconds=0,
+            max_relation_fetches=5,
+        )
+        with self.assertRaises(client.OsmClientError) as ctx:
+            osm_client.fetch_relation_full(1)
+        self.assertIn("Network error", str(ctx.exception))
 
 
 if __name__ == "__main__":

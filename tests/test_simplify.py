@@ -18,6 +18,71 @@ class GeometrySimplifierTest(unittest.TestCase):
         result = simplify.GeometrySimplifier().simplify(geom, None)
         self.assertIs(result, geom)
 
+    def test_noop_when_tolerance_zero(self) -> None:
+        geom = _square()
+        result = simplify.GeometrySimplifier().simplify(geom, 0.0)
+        self.assertIs(result, geom)
+
+    def test_noop_when_tolerance_negative(self) -> None:
+        geom = _square()
+        result = simplify.GeometrySimplifier().simplify(geom, -1.0)
+        self.assertIs(result, geom)
+
+    def test_collapse_below_three_points_keeps_original(self) -> None:
+        # Dense collinear edges: huge tolerance would keep <3 open vertices.
+        points = _dense_square_ring(40)
+        geom = models.MultiPolygon(
+            polygons=[models.Polygon(outer=models.Ring(points=points))]
+        )
+        result = simplify.GeometrySimplifier().simplify(geom, 1e12)
+        ring = result.polygons[0].outer
+        self.assertEqual(ring.points, points)
+        self.assertTrue(ring.is_closed())
+        self.assertGreaterEqual(len(ring.points), 4)
+
+    def test_outer_and_inner_both_simplified(self) -> None:
+        outer_points = [
+            models.LatLon(0, 0),
+            models.LatLon(0, 0.5),
+            models.LatLon(0, 1),
+            models.LatLon(0.5, 1),
+            models.LatLon(1, 1),
+            models.LatLon(1, 0.5),
+            models.LatLon(1, 0),
+            models.LatLon(0.5, 0),
+            models.LatLon(0, 0),
+        ]
+        inner_points = [
+            models.LatLon(0.25, 0.25),
+            models.LatLon(0.25, 0.5),
+            models.LatLon(0.25, 0.75),
+            models.LatLon(0.5, 0.75),
+            models.LatLon(0.75, 0.75),
+            models.LatLon(0.75, 0.5),
+            models.LatLon(0.75, 0.25),
+            models.LatLon(0.5, 0.25),
+            models.LatLon(0.25, 0.25),
+        ]
+        geom = models.MultiPolygon(
+            polygons=[
+                models.Polygon(
+                    outer=models.Ring(points=outer_points),
+                    inners=[models.Ring(points=inner_points)],
+                )
+            ]
+        )
+        result = simplify.GeometrySimplifier().simplify(geom, 22_000.0)
+        outer = result.polygons[0].outer
+        inner = result.polygons[0].inners[0]
+        self.assertTrue(outer.is_closed())
+        self.assertTrue(inner.is_closed())
+        self.assertLess(len(outer.points), len(outer_points))
+        self.assertLess(len(inner.points), len(inner_points))
+        self.assertGreaterEqual(len(outer.points), 4)
+        self.assertGreaterEqual(len(inner.points), 4)
+        # pylint: disable-next=protected-access
+        self.assertTrue(simplify._point_in_ring(inner.points[0], outer))
+
     def test_reduces_vertices_and_keeps_closed(self) -> None:
         points = [
             models.LatLon(0, 0),

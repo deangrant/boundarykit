@@ -65,7 +65,16 @@ class ExportersTest(unittest.TestCase):
         )
         self.assertEqual(payload["type"], "Feature")
         self.assertEqual(payload["properties"]["osm_relation_id"], 42)
+        self.assertEqual(payload["properties"]["name"], "Sample")
         self.assertEqual(payload["geometry"]["type"], "MultiPolygon")
+
+    def test_geojson_feature_name_with_quotes_and_newlines(self) -> None:
+        geom = _sample_geometry()
+        geom.name = 'Line "One"\nLine Two'
+        payload = json.loads(
+            geojson.GeoJsonExporter(as_feature=True).dumps(geom)
+        )
+        self.assertEqual(payload["properties"]["name"], 'Line "One"\nLine Two')
 
     def test_geojson_enforces_rfc7946_winding(self) -> None:
         # Clockwise outer (lon/lat) and counterclockwise inner in source.
@@ -107,6 +116,32 @@ class ExportersTest(unittest.TestCase):
         geom.name = "END"
         text = poly.PolyExporter().dumps(geom)
         self.assertEqual(text.splitlines()[0], "relation_42")
+
+    def test_poly_name_with_quotes(self) -> None:
+        geom = _sample_geometry()
+        geom.name = 'Area "Quoted"'
+        text = poly.PolyExporter().dumps(geom)
+        self.assertEqual(text.splitlines()[0], 'Area "Quoted"')
+
+    def test_poly_multiple_polygons_inner_markers(self) -> None:
+        geom = models.MultiPolygon(
+            polygons=[
+                models.Polygon(
+                    outer=_square_ring(0.0, 0.0, 2.0),
+                    inners=[_square_ring(0.5, 0.5, 0.5)],
+                ),
+                models.Polygon(
+                    outer=_square_ring(10.0, 10.0, 2.0),
+                    inners=[_square_ring(10.5, 10.5, 0.5)],
+                ),
+            ],
+            name="Multi",
+        )
+        text = poly.PolyExporter().dumps(geom)
+        self.assertIn("\n1\n", text)
+        self.assertIn("\n!2\n", text)
+        self.assertIn("\n3\n", text)
+        self.assertIn("\n!4\n", text)
 
     def test_wkt_and_ewkt(self) -> None:
         wkt_text = wkt.WktExporter().dumps(_sample_geometry())
@@ -161,6 +196,26 @@ class ExportersTest(unittest.TestCase):
             wkt.WktExporter().export(_sample_geometry(), path)
             self.assertTrue(path.is_file())
             self.assertIn("MULTIPOLYGON", path.read_text(encoding="utf-8"))
+
+    def test_svg_empty_geometry(self) -> None:
+        geom = models.MultiPolygon(polygons=[], name="Empty")
+        text = svg.SvgExporter().dumps(geom)
+        self.assertIn("<svg", text)
+        self.assertIn("(empty)", text)
+        self.assertIn("Empty", text)
+        self.assertNotIn("<path", text)
+
+
+def _square_ring(lat0: float, lon0: float, size: float) -> models.Ring:
+    return models.Ring(
+        points=[
+            models.LatLon(lat0, lon0),
+            models.LatLon(lat0, lon0 + size),
+            models.LatLon(lat0 + size, lon0 + size),
+            models.LatLon(lat0 + size, lon0),
+            models.LatLon(lat0, lon0),
+        ]
+    )
 
 
 def _coords_signed_area(coords: list[list[float]]) -> float:
