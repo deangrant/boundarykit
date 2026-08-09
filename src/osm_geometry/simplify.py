@@ -62,22 +62,43 @@ class GeometrySimplifier:
 def _douglas_peucker(
     points: list[models.LatLon], tolerance: float
 ) -> list[models.LatLon]:
+    """Simplifies a polyline with iterative Douglas–Peucker.
+
+    Uses an explicit stack of index ranges so large rings cannot raise
+    RecursionError.
+
+    Args:
+        points: Open polyline (first != last for closed rings).
+        tolerance: Maximum perpendicular distance in degrees.
+
+    Returns:
+        Simplified polyline preserving original endpoint order.
+    """
     if len(points) < 3:
         return list(points)
-    start = points[0]
-    end = points[-1]
-    max_distance = -1.0
-    index = 0
-    for i in range(1, len(points) - 1):
-        distance = _perpendicular_distance(points[i], start, end)
-        if distance > max_distance:
-            index = i
-            max_distance = distance
-    if max_distance > tolerance:
-        left = _douglas_peucker(points[: index + 1], tolerance)
-        right = _douglas_peucker(points[index:], tolerance)
-        return [*left[:-1], *right]
-    return [start, end]
+
+    keep = [False] * len(points)
+    keep[0] = True
+    keep[-1] = True
+    stack: list[tuple[int, int]] = [(0, len(points) - 1)]
+
+    while stack:
+        start_idx, end_idx = stack.pop()
+        start = points[start_idx]
+        end = points[end_idx]
+        max_distance = -1.0
+        index = start_idx
+        for i in range(start_idx + 1, end_idx):
+            distance = _perpendicular_distance(points[i], start, end)
+            if distance > max_distance:
+                index = i
+                max_distance = distance
+        if max_distance > tolerance:
+            keep[index] = True
+            stack.append((start_idx, index))
+            stack.append((index, end_idx))
+
+    return [point for point, retained in zip(points, keep) if retained]
 
 
 def _perpendicular_distance(
