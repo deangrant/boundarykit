@@ -10,13 +10,13 @@ from urllib import error as urllib_error
 from urllib import request as urllib_request
 import xml.etree.ElementTree as ET
 
-from osm_geometry import __version__
-from osm_geometry import models
+from boundarykit import __version__
+from boundarykit import models
 
 _LOG = logging.getLogger(__name__)
 
 _DEFAULT_BASE_URL = "https://api.openstreetmap.org/api/0.6"
-_USER_AGENT = f"osm-geometry/{__version__}"
+_USER_AGENT = f"boundarykit/{__version__}"
 _DEFAULT_MAX_RESPONSE_BYTES = 32 * 1024 * 1024
 _DEFAULT_MIN_REQUEST_INTERVAL_SECONDS = 1.0
 _DEFAULT_MAX_RETRIES = 3

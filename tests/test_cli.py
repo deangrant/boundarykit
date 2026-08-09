@@ -7,8 +7,8 @@ import pathlib
 import unittest
 from unittest import mock
 
-from osm_geometry import assembler
-from osm_geometry import cli
+from boundarykit import assembler
+from boundarykit import cli
 
 
 class CliMainTest(unittest.TestCase):

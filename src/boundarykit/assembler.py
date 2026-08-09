@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from osm_geometry import models
+from boundarykit import models
 
 _WAY_NON_GEOMETRY_ROLES = frozenset(
     {

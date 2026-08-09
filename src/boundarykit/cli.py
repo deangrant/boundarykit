@@ -1,4 +1,4 @@
-"""Command-line interface for osm-geometry."""
+"""Command-line interface for boundarykit."""
 
 from __future__ import annotations
 
@@ -7,21 +7,21 @@ import logging
 import pathlib
 import sys
 
-from osm_geometry import assembler
-from osm_geometry import client
-from osm_geometry import models
-from osm_geometry import service
-from osm_geometry import simplify
-from osm_geometry.exporters import geojson
-from osm_geometry.exporters import poly
-from osm_geometry.exporters import svg
-from osm_geometry.exporters import wkt
+from boundarykit import assembler
+from boundarykit import client
+from boundarykit import models
+from boundarykit import service
+from boundarykit import simplify
+from boundarykit.exporters import geojson
+from boundarykit.exporters import poly
+from boundarykit.exporters import svg
+from boundarykit.exporters import wkt
 
 
 def build_parser() -> argparse.ArgumentParser:
     """Returns the CLI argument parser."""
     parser = argparse.ArgumentParser(
-        prog="osm-geometry",
+        prog="boundarykit",
         description=(
             "Build full geometry for an OpenStreetMap relation (including "
             "sub-relations) and export poly, GeoJSON, WKT, or SVG."

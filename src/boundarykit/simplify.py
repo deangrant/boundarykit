@@ -5,7 +5,7 @@ from __future__ import annotations
 import dataclasses
 import math
 
-from osm_geometry import models
+from boundarykit import models
 
 _METERS_PER_DEGREE = 111_320.0
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pathlib
 import xml.sax.saxutils as saxutils
 
-from osm_geometry import models
+from boundarykit import models
 
 
 class SvgExporter:

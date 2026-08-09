@@ -6,13 +6,13 @@ import pathlib
 import tempfile
 import unittest
 
-from osm_geometry import assembler
-from osm_geometry import client
-from osm_geometry import models
-from osm_geometry import service
-from osm_geometry import simplify
-from osm_geometry.exporters import geojson
-from osm_geometry.exporters import wkt
+from boundarykit import assembler
+from boundarykit import client
+from boundarykit import models
+from boundarykit import service
+from boundarykit import simplify
+from boundarykit.exporters import geojson
+from boundarykit.exporters import wkt
 
 _FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 

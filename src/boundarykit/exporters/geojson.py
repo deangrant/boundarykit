@@ -6,7 +6,7 @@ import json
 import pathlib
 from typing import Any
 
-from osm_geometry import models
+from boundarykit import models
 
 
 class GeoJsonExporter:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pathlib
 
-from osm_geometry import models
+from boundarykit import models
 
 
 class WktExporter:

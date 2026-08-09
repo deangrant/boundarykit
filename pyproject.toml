@@ -3,14 +3,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "osm-geometry"
+name = "boundarykit"
 requires-python = ">=3.11"
 version = "0.1.0"
 description = "Build and export OpenStreetMap relation geometries"
 dependencies = []
 
 [project.scripts]
-osm-geometry = "osm_geometry.cli:main"
+boundarykit = "boundarykit.cli:main"
 
 [dependency-groups]
 dev = [
@@ -20,7 +20,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/osm_geometry"]
+packages = ["src/boundarykit"]
 
 [tool.black]
 line-length = 80

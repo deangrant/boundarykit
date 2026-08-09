@@ -7,8 +7,8 @@ import pathlib
 import unittest
 from urllib import error as urllib_error
 
-from osm_geometry import __version__
-from osm_geometry import client
+from boundarykit import __version__
+from boundarykit import client
 
 _FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 _MINIMAL_OSM = b"""<?xml version="1.0"?>
@@ -148,7 +148,7 @@ class OsmApiClientLimitsTest(unittest.TestCase):
     def test_default_user_agent_matches_package_version(self) -> None:
         osm_client = client.OsmApiClient(min_request_interval_seconds=0)
         # pylint: disable-next=protected-access
-        self.assertEqual(osm_client._user_agent, f"osm-geometry/{__version__}")
+        self.assertEqual(osm_client._user_agent, f"boundarykit/{__version__}")
 
     def test_oversized_body_raises(self) -> None:
         body = b"x" * 100

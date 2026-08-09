@@ -5,7 +5,7 @@ from __future__ import annotations
 import pathlib
 import re
 
-from osm_geometry import models
+from boundarykit import models
 
 _WHITESPACE = re.compile(r"\s+")
 

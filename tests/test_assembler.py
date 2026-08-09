@@ -5,9 +5,9 @@ from __future__ import annotations
 import pathlib
 import unittest
 
-from osm_geometry import assembler
-from osm_geometry import client
-from osm_geometry import models
+from boundarykit import assembler
+from boundarykit import client
+from boundarykit import models
 
 _FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 

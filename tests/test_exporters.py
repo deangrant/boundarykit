@@ -8,11 +8,11 @@ import re
 import tempfile
 import unittest
 
-from osm_geometry import models
-from osm_geometry.exporters import geojson
-from osm_geometry.exporters import poly
-from osm_geometry.exporters import svg
-from osm_geometry.exporters import wkt
+from boundarykit import models
+from boundarykit.exporters import geojson
+from boundarykit.exporters import poly
+from boundarykit.exporters import svg
+from boundarykit.exporters import wkt
 
 
 def _sample_geometry() -> models.MultiPolygon:

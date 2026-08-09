@@ -5,7 +5,7 @@ from __future__ import annotations
 import pathlib
 from typing import Protocol
 
-from osm_geometry import models
+from boundarykit import models
 
 
 class GeometryExporter(Protocol):

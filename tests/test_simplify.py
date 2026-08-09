@@ -6,8 +6,8 @@ import sys
 import unittest
 from unittest import mock
 
-from osm_geometry import models
-from osm_geometry import simplify
+from boundarykit import models
+from boundarykit import simplify
 
 
 class GeometrySimplifierTest(unittest.TestCase):

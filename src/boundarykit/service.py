@@ -7,11 +7,11 @@ import logging
 import pathlib
 import re
 
-from osm_geometry import assembler
-from osm_geometry import client
-from osm_geometry import models
-from osm_geometry import simplify
-from osm_geometry.exporters import base
+from boundarykit import assembler
+from boundarykit import client
+from boundarykit import models
+from boundarykit import simplify
+from boundarykit.exporters import base
 
 _LOG = logging.getLogger(__name__)
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
