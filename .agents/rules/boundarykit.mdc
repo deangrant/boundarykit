@@ -1,0 +1,50 @@
+---
+description: boundarykit project conventions — tooling, DI, and verification
+alwaysApply: true
+---
+
+# boundarykit project policy
+
+Architecture overview: [ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+Agent index: [AGENTS.md](../../AGENTS.md).
+
+When writing or reviewing Python, use:
+
+- `.agents/skills/google-python-style-guide`
+- `.agents/skills/python-solid-guide` (for OOP changes)
+- `.agents/skills/boundarykit-domain` (assembly, exporters, fixtures)
+
+## Tooling
+
+- Package manager: **uv** (`uv.lock`; CI uses `uv sync --locked --group dev`)
+- Format: **Black** + **isort** (Google profile, 80 columns) via `pyproject.toml`
+- Lint: **pylint** with `.pylintrc` — **never** `# pylint: disable`; fix the issue
+- Tests: **unittest** (not pytest)
+- Python: `>=3.11` (`.python-version` is `3.11`)
+- Pin exact versions in `dependency-groups` when adding or changing tools
+
+## Conventions
+
+- Absolute imports only: `from boundarykit import models` (no relative imports)
+- Prefer Google-style docstrings
+- Dependency injection: `RelationGeometryService` takes Protocols/concretes;
+  `cli.build_service` wires them. Do not hard-code collaborators in the service.
+- No new **runtime** dependencies without an explicit ask (stdlib-only today)
+
+## Local verify (CI parity)
+
+```bash
+uv sync --locked --group dev
+uv run black --check src tests
+uv run isort --check-only src tests
+uv run pylint --rcfile=.pylintrc src/boundarykit tests
+uv run python -m unittest discover -s tests -v
+```
+
+Or run the project `/check` command.
+
+## Git
+
+- Do not commit unless the user asks.
+- If asked for a commit message only, draft a conventional commit and stop
+  (do not run `git commit`).

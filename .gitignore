@@ -18,7 +18,20 @@ build/
 .ruff_cache/
 .pylint.d/
 
+# Coverage
+.coverage
+htmlcov/
+coverage.xml
+
+# Env / secrets
+.env
+.env.*
+
 # OS / editor
 .DS_Store
+Thumbs.db
 *.swp
 .idea/
+
+# Local CLI output (README examples)
+out/
