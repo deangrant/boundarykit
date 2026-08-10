@@ -297,7 +297,7 @@ def _assign_inners(
         containing = [
             polygon
             for polygon in polygons
-            if _point_in_ring(probe, polygon.outer)
+            if point_in_ring(probe, polygon.outer)
         ]
         if len(containing) != 1:
             raise AssemblyError(
@@ -316,7 +316,7 @@ def _same_point(left: models.LatLon, right: models.LatLon) -> bool:
     return left.lat == right.lat and left.lon == right.lon
 
 
-def _point_in_ring(point: models.LatLon, ring: models.Ring) -> bool:
+def point_in_ring(point: models.LatLon, ring: models.Ring) -> bool:
     """Ray-casting point-in-polygon test (lon/lat as x/y)."""
     x = point.lon
     y = point.lat

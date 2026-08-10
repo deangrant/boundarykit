@@ -6,6 +6,7 @@ import io
 import pathlib
 import unittest
 from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 from boundarykit import __version__
 from boundarykit import client
@@ -146,9 +147,21 @@ class OsmApiClientLimitsTest(unittest.TestCase):
     """Tests OsmApiClient size, budget, throttle, and retry behavior."""
 
     def test_default_user_agent_matches_package_version(self) -> None:
-        osm_client = client.OsmApiClient(min_request_interval_seconds=0)
-        # pylint: disable-next=protected-access
-        self.assertEqual(osm_client._user_agent, f"boundarykit/{__version__}")
+        captured: dict[str, str | None] = {}
+
+        def fake_urlopen(
+            req: urllib_request.Request, timeout: float = 0
+        ) -> _FakeResponse:
+            del timeout  # Unused.
+            captured["user_agent"] = req.get_header("User-agent")
+            return _FakeResponse(_MINIMAL_OSM)
+
+        osm_client = client.OsmApiClient(
+            urlopen=fake_urlopen,
+            min_request_interval_seconds=0,
+        )
+        osm_client.fetch_relation_full(1)
+        self.assertEqual(captured["user_agent"], f"boundarykit/{__version__}")
 
     def test_oversized_body_raises(self) -> None:
         body = b"x" * 100

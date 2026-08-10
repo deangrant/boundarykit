@@ -59,7 +59,7 @@ class GeometrySimplifier:
         inners: list[models.Ring] = []
         for inner in polygon.inners:
             candidate = self._simplify_ring(inner, tolerance)
-            if candidate.points and _point_in_ring(candidate.points[0], outer):
+            if candidate.points and point_in_ring(candidate.points[0], outer):
                 inners.append(candidate)
             else:
                 inners.append(inner)
@@ -160,10 +160,10 @@ def _is_valid_ring(ring: models.Ring) -> bool:
     """Returns True when ring is closed, large enough, and simple."""
     if not ring.is_closed() or len(ring.points) < 4:
         return False
-    return not _ring_self_intersects(ring)
+    return not ring_self_intersects(ring)
 
 
-def _ring_self_intersects(ring: models.Ring) -> bool:
+def ring_self_intersects(ring: models.Ring) -> bool:
     """Returns True when a closed ring has crossing non-adjacent edges."""
     pts = ring.points
     # Last point duplicates the first for a closed ring.
@@ -215,7 +215,7 @@ def _orient(a: models.LatLon, b: models.LatLon, c: models.LatLon) -> int:
     return 0
 
 
-def _point_in_ring(point: models.LatLon, ring: models.Ring) -> bool:
+def point_in_ring(point: models.LatLon, ring: models.Ring) -> bool:
     """Ray-casting point-in-polygon test (lon/lat as x/y)."""
     x = point.lon
     y = point.lat

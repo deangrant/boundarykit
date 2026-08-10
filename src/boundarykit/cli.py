@@ -164,7 +164,12 @@ def main(argv: list[str] | None = None) -> int:
             output=args.output,
             output_dir=args.output_dir,
         )
-    except Exception as err:  # pylint: disable=broad-exception-caught
+    except (
+        assembler.AssemblyError,
+        client.OsmClientError,
+        OSError,
+        ValueError,
+    ) as err:
         logging.error("%s", err)
         return 1
 

@@ -14,12 +14,12 @@ from boundarykit import cli
 class CliMainTest(unittest.TestCase):
     """Tests cli.main exit behavior."""
 
-    def test_uncaught_keyerror_returns_exit_code_1(self) -> None:
+    def test_uncaught_keyerror_propagates(self) -> None:
         fake_service = mock.Mock()
         fake_service.run.side_effect = KeyError("unexpected")
         with mock.patch.object(cli, "build_service", return_value=fake_service):
-            code = cli.main(["100", "-f", "geojson"])
-        self.assertEqual(code, 1)
+            with self.assertRaises(KeyError):
+                cli.main(["100", "-f", "geojson"])
 
     def test_success_prints_paths_and_exits_0(self) -> None:
         fake_service = mock.Mock()

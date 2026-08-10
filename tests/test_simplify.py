@@ -80,8 +80,7 @@ class GeometrySimplifierTest(unittest.TestCase):
         self.assertLess(len(inner.points), len(inner_points))
         self.assertGreaterEqual(len(outer.points), 4)
         self.assertGreaterEqual(len(inner.points), 4)
-        # pylint: disable-next=protected-access
-        self.assertTrue(simplify._point_in_ring(inner.points[0], outer))
+        self.assertTrue(simplify.point_in_ring(inner.points[0], outer))
 
     def test_reduces_vertices_and_keeps_closed(self) -> None:
         points = [
@@ -207,8 +206,7 @@ class GeometrySimplifierTest(unittest.TestCase):
                 models.LatLon(0, 0),
             ]
         )
-        # pylint: disable-next=protected-access
-        self.assertTrue(simplify._ring_self_intersects(bowtie))
+        self.assertTrue(simplify.ring_self_intersects(bowtie))
 
     def test_self_intersecting_simplification_keeps_original(self) -> None:
         # Source ring is simple; mocked DP keep-set forms a bowtie.

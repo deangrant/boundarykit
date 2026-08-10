@@ -354,8 +354,7 @@ class RelationAssemblerTest(unittest.TestCase):
         for polygon in geom.polygons:
             self.assertEqual(len(polygon.inners), 1)
             probe = polygon.inners[0].points[0]
-            # pylint: disable-next=protected-access
-            self.assertTrue(assembler._point_in_ring(probe, polygon.outer))
+            self.assertTrue(assembler.point_in_ring(probe, polygon.outer))
 
     def test_inner_role_casing(self) -> None:
         outer_nodes = _closed_square_nodes(1, (0.0, 0.0), 2.0)
