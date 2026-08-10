@@ -68,9 +68,9 @@ dev = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "black", specifier = ">=24.0.0" },
-    { name = "isort", specifier = ">=5.13.0" },
-    { name = "pylint", specifier = ">=3.0.0" },
+    { name = "black", specifier = "==26.5.1" },
+    { name = "isort", specifier = "==8.0.1" },
+    { name = "pylint", specifier = "==4.0.6" },
 ]
 
 [[package]]
