@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pathlib
 import re
+from typing import ClassVar
 
 from boundarykit import models
 
@@ -13,8 +14,8 @@ _WHITESPACE = re.compile(r"\s+")
 class PolyExporter:
     """Exports Osmosis-compatible .poly text."""
 
-    format_id = "poly"
-    file_extension = ".poly"
+    format_id: ClassVar[str] = "poly"
+    file_extension: ClassVar[str] = ".poly"
 
     def export(self, geometry: models.MultiPolygon, path: pathlib.Path) -> None:
         """Writes .poly content to path.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pathlib
+from typing import ClassVar
 
 from boundarykit import models
 
@@ -10,10 +11,16 @@ from boundarykit import models
 class WktExporter:
     """Exports WKT or EWKT multipolygon text."""
 
-    format_id = "wkt"
-    file_extension = ".wkt"
+    format_id: ClassVar[str] = "wkt"
+    file_extension: ClassVar[str] = ".wkt"
 
     def __init__(self, ewkt: bool = False, srid: int = 4326) -> None:
+        """Creates a WKT exporter.
+
+        Args:
+            ewkt: When True, prefix output with an SRID EWKT header.
+            srid: Spatial reference id used when `ewkt` is True.
+        """
         self._ewkt = ewkt
         self._srid = srid
 
@@ -28,7 +35,7 @@ class WktExporter:
 
     def dumps(self, geometry: models.MultiPolygon) -> str:
         """Returns WKT/EWKT text for geometry."""
-        polygons = []
+        polygons: list[str] = []
         for polygon in geometry.polygons:
             rings = [_format_ring(polygon.outer)]
             rings.extend(_format_ring(inner) for inner in polygon.inners)

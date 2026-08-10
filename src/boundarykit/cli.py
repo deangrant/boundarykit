@@ -100,7 +100,7 @@ def build_service(
     Returns:
         Configured service instance.
     """
-    client_kwargs = {}
+    client_kwargs: dict[str, str] = {}
     if base_url:
         client_kwargs["base_url"] = base_url
     osm_client = client.OsmApiClient(**client_kwargs)

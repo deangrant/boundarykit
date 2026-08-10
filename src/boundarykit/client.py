@@ -282,11 +282,7 @@ def _parse_way(element: ET.Element) -> models.OsmWay:
         node_ids = [int(nd.attrib["ref"]) for nd in element.findall("nd")]
     except (KeyError, TypeError, ValueError) as err:
         raise _invalid_element_error("way", element, err) from err
-    tags = {
-        tag.attrib["k"]: tag.attrib["v"]
-        for tag in element.findall("tag")
-        if "k" in tag.attrib and "v" in tag.attrib
-    }
+    tags = _parse_tags(element)
     return models.OsmWay(osm_id=osm_id, node_ids=node_ids, tags=tags)
 
 
@@ -303,12 +299,17 @@ def _parse_relation(element: ET.Element) -> models.OsmRelation:
         ]
     except (KeyError, TypeError, ValueError) as err:
         raise _invalid_element_error("relation", element, err) from err
-    tags = {
+    tags = _parse_tags(element)
+    return models.OsmRelation(osm_id=osm_id, members=members, tags=tags)
+
+
+def _parse_tags(element: ET.Element) -> dict[str, str]:
+    """Returns OSM tag key/value pairs from an element."""
+    return {
         tag.attrib["k"]: tag.attrib["v"]
         for tag in element.findall("tag")
         if "k" in tag.attrib and "v" in tag.attrib
     }
-    return models.OsmRelation(osm_id=osm_id, members=members, tags=tags)
 
 
 def _invalid_element_error(

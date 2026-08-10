@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import pathlib
-from typing import Any
+from typing import Any, ClassVar
 
 from boundarykit import models
 
@@ -12,10 +12,16 @@ from boundarykit import models
 class GeoJsonExporter:
     """Exports GeoJSON MultiPolygon geometry or Feature."""
 
-    format_id = "geojson"
-    file_extension = ".geojson"
+    format_id: ClassVar[str] = "geojson"
+    file_extension: ClassVar[str] = ".geojson"
 
     def __init__(self, as_feature: bool = False) -> None:
+        """Creates a GeoJSON exporter.
+
+        Args:
+            as_feature: When True, wrap geometry in a Feature with name
+                properties.
+        """
         self._as_feature = as_feature
 
     def export(self, geometry: models.MultiPolygon, path: pathlib.Path) -> None:
@@ -33,7 +39,7 @@ class GeoJsonExporter:
         return json.dumps(payload, indent=2) + "\n"
 
     def _build(self, geometry: models.MultiPolygon) -> dict[str, Any]:
-        coordinates = []
+        coordinates: list[list[list[list[float]]]] = []
         for polygon in geometry.polygons:
             rings = [_oriented_ring(polygon.outer, clockwise=False)]
             rings.extend(

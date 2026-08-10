@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
+from boundarykit import geometry
 from boundarykit import models
 
 _WAY_NON_GEOMETRY_ROLES = frozenset(
@@ -297,7 +298,7 @@ def _assign_inners(
         containing = [
             polygon
             for polygon in polygons
-            if point_in_ring(probe, polygon.outer)
+            if geometry.point_in_ring(probe, polygon.outer)
         ]
         if len(containing) != 1:
             raise AssemblyError(
@@ -314,23 +315,3 @@ def _is_closed_line(points: Sequence[models.LatLon]) -> bool:
 
 def _same_point(left: models.LatLon, right: models.LatLon) -> bool:
     return left.lat == right.lat and left.lon == right.lon
-
-
-def point_in_ring(point: models.LatLon, ring: models.Ring) -> bool:
-    """Ray-casting point-in-polygon test (lon/lat as x/y)."""
-    x = point.lon
-    y = point.lat
-    inside = False
-    pts = ring.points
-    j = len(pts) - 1
-    for i, pi in enumerate(pts):
-        pj = pts[j]
-        intersects = ((pi.lat > y) != (pj.lat > y)) and (
-            x
-            < (pj.lon - pi.lon) * (y - pi.lat) / (pj.lat - pi.lat + 0.0)
-            + pi.lon
-        )
-        if intersects:
-            inside = not inside
-        j = i
-    return inside

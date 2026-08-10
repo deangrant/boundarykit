@@ -7,6 +7,7 @@ import unittest
 
 from boundarykit import assembler
 from boundarykit import client
+from boundarykit import geometry
 from boundarykit import models
 
 _FIXTURES = pathlib.Path(__file__).parent / "fixtures"
@@ -354,7 +355,7 @@ class RelationAssemblerTest(unittest.TestCase):
         for polygon in geom.polygons:
             self.assertEqual(len(polygon.inners), 1)
             probe = polygon.inners[0].points[0]
-            self.assertTrue(assembler.point_in_ring(probe, polygon.outer))
+            self.assertTrue(geometry.point_in_ring(probe, polygon.outer))
 
     def test_inner_role_casing(self) -> None:
         outer_nodes = _closed_square_nodes(1, (0.0, 0.0), 2.0)

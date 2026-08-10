@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pathlib
+from typing import ClassVar
 import xml.sax.saxutils as saxutils
 
 from boundarykit import models
@@ -11,8 +12,8 @@ from boundarykit import models
 class SvgExporter:
     """Exports a simple SVG preview of the multipolygon."""
 
-    format_id = "svg"
-    file_extension = ".svg"
+    format_id: ClassVar[str] = "svg"
+    file_extension: ClassVar[str] = ".svg"
 
     def __init__(
         self,
@@ -20,6 +21,13 @@ class SvgExporter:
         height: int = 600,
         padding: float = 0.05,
     ) -> None:
+        """Creates an SVG exporter.
+
+        Args:
+            width: Output canvas width in pixels.
+            height: Output canvas height in pixels.
+            padding: Fractional padding around the projected bounds.
+        """
         self._width = width
         self._height = height
         self._padding = padding

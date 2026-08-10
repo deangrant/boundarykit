@@ -6,6 +6,7 @@ import sys
 import unittest
 from unittest import mock
 
+from boundarykit import geometry
 from boundarykit import models
 from boundarykit import simplify
 
@@ -80,7 +81,7 @@ class GeometrySimplifierTest(unittest.TestCase):
         self.assertLess(len(inner.points), len(inner_points))
         self.assertGreaterEqual(len(outer.points), 4)
         self.assertGreaterEqual(len(inner.points), 4)
-        self.assertTrue(simplify.point_in_ring(inner.points[0], outer))
+        self.assertTrue(geometry.point_in_ring(inner.points[0], outer))
 
     def test_reduces_vertices_and_keeps_closed(self) -> None:
         points = [

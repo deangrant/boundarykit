@@ -49,7 +49,7 @@ class OsmRelation:
 
     @property
     def name(self) -> str | None:
-        """Returns the relation name tag if present."""
+        """Relation `name` tag, if present."""
         return self.tags.get("name")
 
 
@@ -62,7 +62,11 @@ class ElementStore:
     relations: dict[int, OsmRelation] = dataclasses.field(default_factory=dict)
 
     def merge(self, other: ElementStore) -> None:
-        """Merges another store into this one."""
+        """Merges another store into this one in place.
+
+        Args:
+            other: Store whose elements are copied into this one.
+        """
         self.nodes.update(other.nodes)
         self.ways.update(other.ways)
         self.relations.update(other.relations)

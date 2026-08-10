@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 import math
 
+from boundarykit import geometry as geom
 from boundarykit import models
 
 _METERS_PER_DEGREE = 111_320.0
@@ -59,7 +60,9 @@ class GeometrySimplifier:
         inners: list[models.Ring] = []
         for inner in polygon.inners:
             candidate = self._simplify_ring(inner, tolerance)
-            if candidate.points and point_in_ring(candidate.points[0], outer):
+            if candidate.points and geom.point_in_ring(
+                candidate.points[0], outer
+            ):
                 inners.append(candidate)
             else:
                 inners.append(inner)
@@ -213,23 +216,3 @@ def _orient(a: models.LatLon, b: models.LatLon, c: models.LatLon) -> int:
     if value < 0:
         return -1
     return 0
-
-
-def point_in_ring(point: models.LatLon, ring: models.Ring) -> bool:
-    """Ray-casting point-in-polygon test (lon/lat as x/y)."""
-    x = point.lon
-    y = point.lat
-    inside = False
-    pts = ring.points
-    j = len(pts) - 1
-    for i, pi in enumerate(pts):
-        pj = pts[j]
-        intersects = ((pi.lat > y) != (pj.lat > y)) and (
-            x
-            < (pj.lon - pi.lon) * (y - pi.lat) / (pj.lat - pi.lat + 0.0)
-            + pi.lon
-        )
-        if intersects:
-            inside = not inside
-        j = i
-    return inside
